@@ -1,0 +1,335 @@
+---
+title: "多阶段分类冲积图：模拟数据复现"
+author: "Fanglu-Chen"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    self_contained: true
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width = 12,
+  fig.height = 7,
+  dpi = 160
+)
+
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+set.seed(20260716)
+```
+
+## 设计说明
+
+本例复现参考图中的三阶段分类冲积图结构。数据全部为可重复生成的模拟数据：左侧为国家，中间为 LFP 类别，右侧为生态区域；流带颜色表示 LFP score。纵轴表示每条流带占全部观测的比例。
+
+## 生成模拟数据
+
+```{r simulate-data}
+countries <- c("NZL", "AUS", "ARG", "MEX", "FRA", "CHL", "USA", "GBR")
+country_probability <- c(0.025, 0.035, 0.060, 0.075, 0.105, 0.180, 0.225, 0.295)
+
+lfp_profiles <- list(
+  NZL = c(None = 0.10, Less = 0.16, Moderately = 0.24, Highly = 0.50),
+  AUS = c(None = 0.12, Less = 0.20, Moderately = 0.30, Highly = 0.38),
+  ARG = c(None = 0.22, Less = 0.29, Moderately = 0.30, Highly = 0.19),
+  MEX = c(None = 0.28, Less = 0.35, Moderately = 0.24, Highly = 0.13),
+  FRA = c(None = 0.38, Less = 0.34, Moderately = 0.20, Highly = 0.08),
+  CHL = c(None = 0.30, Less = 0.31, Moderately = 0.24, Highly = 0.15),
+  USA = c(None = 0.43, Less = 0.31, Moderately = 0.18, Highly = 0.08),
+  GBR = c(None = 0.51, Less = 0.29, Moderately = 0.14, Highly = 0.06)
+)
+
+realm_profiles <- list(
+  NZL = c(`Southern Ocean` = 0.53, `Temperate Northern Pacific` = 0.08,
+          `Temperate South America` = 0.29, `Tropical Atlantic` = 0.10),
+  AUS = c(`Southern Ocean` = 0.42, `Temperate Northern Pacific` = 0.20,
+          `Temperate South America` = 0.25, `Tropical Atlantic` = 0.13),
+  ARG = c(`Southern Ocean` = 0.21, `Temperate Northern Pacific` = 0.06,
+          `Temperate South America` = 0.61, `Tropical Atlantic` = 0.12),
+  MEX = c(`Southern Ocean` = 0.03, `Temperate Northern Pacific` = 0.47,
+          `Temperate South America` = 0.14, `Tropical Atlantic` = 0.36),
+  FRA = c(`Southern Ocean` = 0.08, `Temperate Northern Pacific` = 0.45,
+          `Temperate South America` = 0.18, `Tropical Atlantic` = 0.29),
+  CHL = c(`Southern Ocean` = 0.18, `Temperate Northern Pacific` = 0.10,
+          `Temperate South America` = 0.65, `Tropical Atlantic` = 0.07),
+  USA = c(`Southern Ocean` = 0.03, `Temperate Northern Pacific` = 0.63,
+          `Temperate South America` = 0.12, `Tropical Atlantic` = 0.22),
+  GBR = c(`Southern Ocean` = 0.06, `Temperate Northern Pacific` = 0.42,
+          `Temperate South America` = 0.10, `Tropical Atlantic` = 0.42)
+)
+
+score_profiles <- list(
+  None = c(None = 0.76, Least = 0.11, Moderately = 0.05,
+           Most = 0.03, Loss = 0.03, Heavily = 0.02),
+  Less = c(None = 0.18, Least = 0.44, Moderately = 0.12,
+           Most = 0.06, Loss = 0.14, Heavily = 0.06),
+  Moderately = c(None = 0.06, Least = 0.14, Moderately = 0.34,
+                 Most = 0.23, Loss = 0.11, Heavily = 0.12),
+  Highly = c(None = 0.03, Least = 0.06, Moderately = 0.12,
+             Most = 0.34, Loss = 0.15, Heavily = 0.30)
+)
+
+draw_from_profile <- function(keys, profiles) {
+  vapply(
+    keys,
+    function(key) sample(names(profiles[[key]]), size = 1, prob = profiles[[key]]),
+    character(1)
+  )
+}
+
+n_observations <- 1200
+country <- sample(countries, n_observations, replace = TRUE, prob = country_probability)
+lfp_category <- draw_from_profile(country, lfp_profiles)
+raw_data <- data.frame(country, lfp_category)
+
+# 每条“国家—类别”路径聚合为一条流带，再为路径模拟区域和评分。
+# 最多 8 × 4 = 32 条流带，使主要关系清晰且条带足够粗。
+flow_data <- raw_data |>
+  count(country, lfp_category, name = "n") |>
+  mutate(
+    realm = draw_from_profile(country, realm_profiles),
+    score = draw_from_profile(lfp_category, score_profiles)
+  ) |>
+  mutate(
+    weight = n / sum(n),
+    flow_id = row_number()
+  )
+
+write.csv(
+  flow_data,
+  "synthetic_flow_data.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+
+head(flow_data)
+```
+
+## 计算各分类轴上的堆叠位置
+
+```{r layout-functions}
+score_levels <- c("None", "Least", "Moderately", "Most", "Loss", "Heavily")
+
+axis_definition <- list(
+  list(
+    name = "Country (ISO3)", variable = "country", x = 1,
+    levels = c("GBR", "USA", "CHL", "FRA", "MEX", "ARG", "AUS", "NZL"),
+    tie = c("lfp_category", "realm")
+  ),
+  list(
+    name = "LFP Category", variable = "lfp_category", x = 2,
+    levels = c("Highly", "Moderately", "Less", "None"),
+    tie = c("realm", "country")
+  ),
+  list(
+    name = "Realm", variable = "realm", x = 3,
+    levels = c("Tropical Atlantic", "Temperate South America",
+               "Temperate Northern Pacific", "Southern Ocean"),
+    tie = c("lfp_category", "country")
+  )
+)
+
+calculate_axis_positions <- function(data, definition) {
+  positioned <- data
+  positioned$stratum <- factor(
+    positioned[[definition$variable]],
+    levels = definition$levels
+  )
+  positioned$score_order <- factor(positioned$score, levels = score_levels)
+
+  order_columns <- c("stratum", definition$tie, "score_order", "flow_id")
+  order_arguments <- lapply(order_columns, function(column) positioned[[column]])
+  positioned <- positioned[do.call(order, order_arguments), ]
+
+  stratum_totals <- positioned |>
+    group_by(stratum) |>
+    summarise(total = sum(weight), .groups = "drop") |>
+    arrange(stratum) |>
+    mutate(base = cumsum(total) - total)
+
+  positioned |>
+    left_join(stratum_totals, by = "stratum") |>
+    group_by(stratum) |>
+    mutate(
+      y_low = base + cumsum(weight) - weight,
+      y_high = base + cumsum(weight)
+    ) |>
+    ungroup() |>
+    transmute(
+      flow_id,
+      axis = definition$name,
+      x = definition$x,
+      stratum = as.character(stratum),
+      y_low,
+      y_high
+    )
+}
+
+axis_positions <- bind_rows(lapply(axis_definition, function(definition) {
+  calculate_axis_positions(flow_data, definition)
+}))
+
+stratum_boxes <- axis_positions |>
+  group_by(axis, x, stratum) |>
+  summarise(
+    y_min = min(y_low),
+    y_max = max(y_high),
+    .groups = "drop"
+  ) |>
+  mutate(
+    half_width = case_when(
+      x == 3 ~ 0.28,
+      TRUE ~ 0.14
+    )
+  )
+```
+
+## 构造平滑流带并绘图
+
+```{r alluvial-plot}
+make_ribbon_segment <- function(left_positions, right_positions,
+                                left_edge, right_edge, segment_number) {
+  joined <- left_positions |>
+    select(flow_id, left_low = y_low, left_high = y_high) |>
+    inner_join(
+      right_positions |>
+        select(flow_id, right_low = y_low, right_high = y_high),
+      by = "flow_id"
+    )
+
+  ribbon_list <- lapply(seq_len(nrow(joined)), function(i) {
+    t <- seq(0, 1, length.out = 45)
+    eased <- 3 * t^2 - 2 * t^3
+    x_values <- left_edge + (right_edge - left_edge) * t
+    lower <- joined$left_low[i] + (joined$right_low[i] - joined$left_low[i]) * eased
+    upper <- joined$left_high[i] + (joined$right_high[i] - joined$left_high[i]) * eased
+
+    data.frame(
+      flow_id = joined$flow_id[i],
+      segment = segment_number,
+      polygon_id = paste(joined$flow_id[i], segment_number, sep = "-"),
+      x = c(x_values, rev(x_values)),
+      y = c(lower, rev(upper))
+    )
+  })
+
+  bind_rows(ribbon_list)
+}
+
+axis_1 <- filter(axis_positions, x == 1)
+axis_2 <- filter(axis_positions, x == 2)
+axis_3 <- filter(axis_positions, x == 3)
+
+ribbons <- bind_rows(
+  make_ribbon_segment(axis_1, axis_2, 1.14, 1.86, 1),
+  make_ribbon_segment(axis_2, axis_3, 2.14, 2.72, 2)
+) |>
+  left_join(select(flow_data, flow_id, score), by = "flow_id")
+
+palette_lfp <- c(
+  None = "#D9D9D6",
+  Least = "#C9252D",
+  Moderately = "#6BAED6",
+  Most = "#1F2A5A",
+  Loss = "#E76F51",
+  Heavily = "#2A788E"
+)
+
+p <- ggplot() +
+  geom_polygon(
+    data = ribbons,
+    aes(x = x, y = y, group = polygon_id, fill = score),
+    colour = alpha("#222222", 0.52),
+    linewidth = 0.16,
+    alpha = 0.94
+  ) +
+  geom_rect(
+    data = stratum_boxes,
+    aes(xmin = x - half_width, xmax = x + half_width, ymin = y_min, ymax = y_max),
+    fill = alpha("white", 0.93),
+    colour = "#4A4A4A",
+    linewidth = 0.42
+  ) +
+  geom_text(
+    data = stratum_boxes,
+    aes(x = x, y = (y_min + y_max) / 2, label = stratum),
+    size = 2.65,
+    lineheight = 0.86,
+    colour = "#222222"
+  ) +
+  scale_fill_manual(
+    values = palette_lfp,
+    breaks = score_levels,
+    name = "LFP score"
+  ) +
+  scale_y_continuous(
+    breaks = seq(0, 1, by = 0.1),
+    labels = label_percent(accuracy = 1),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  scale_x_continuous(
+    breaks = c(1, 2, 3),
+    labels = c("Country (ISO3)", "LFP Category", "Realm"),
+    limits = c(0.72, 3.28),
+    expand = c(0, 0)
+  ) +
+  coord_cartesian(ylim = c(0, 1), clip = "off") +
+  labs(
+    title = "Multistage Categorical Alluvial Plot",
+    subtitle = "Synthetic country–LFP category–realm flows",
+    y = "% Area with kelp",
+    x = NULL,
+    caption = "Synthetic data · reproducible seed: 20260716"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position = "left",
+    legend.title = element_text(face = "bold"),
+    legend.key.height = grid::unit(6.5, "mm"),
+    legend.key.width = grid::unit(5.0, "mm"),
+    axis.text.x = element_text(
+      colour = "black",
+      face = "bold",
+      size = 10,
+      margin = margin(t = 10)
+    ),
+    axis.ticks = element_blank(),
+    axis.text.y = element_text(colour = "black", size = 8.5),
+    axis.title.y = element_text(colour = "black", face = "bold"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(colour = "#606060", fill = NA, linewidth = 0.55),
+    plot.title = element_text(face = "bold", size = 17),
+    plot.subtitle = element_text(colour = "#555555"),
+    plot.caption = element_text(hjust = 0.5, margin = margin(t = 14)),
+    plot.caption.position = "plot",
+    plot.margin = margin(12, 16, 12, 12)
+  )
+
+p
+
+ggsave(
+  filename = "multistage_alluvial.png",
+  plot = p,
+  width = 12,
+  height = 7,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+## 输出文件
+
+编译本文档会同时生成：
+
+- `multistage_alluvial.html`：完整的 R Markdown 编译结果；
+- `multistage_alluvial.png`：300 dpi 高清图；
+- `synthetic_flow_data.csv`：由固定随机种子生成的模拟汇总数据。
