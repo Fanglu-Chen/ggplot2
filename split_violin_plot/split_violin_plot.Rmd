@@ -1,0 +1,374 @@
+---
+title: "带显著性标注的分裂小提琴图"
+author: "Fanglu-Chen"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    self_contained: true
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width = 10,
+  fig.height = 6.8,
+  dpi = 180
+)
+
+library(ggplot2)
+library(dplyr)
+
+set.seed(1031)
+```
+
+## 设计说明
+
+本例使用模拟数据复现带显著性标注的分裂小提琴图。每个细胞类型中，左半侧表示 Active compartment，右半侧表示 Repressive compartment；白色竖线和圆点分别表示四分位区间和中位数；上方括号展示两组比较结果。
+
+## 模拟数据
+
+```{r simulate-data}
+cell_types <- c("Exc", "Inh", "Ast", "Oli", "OPC", "Mic/Immune", "Vasc")
+compartments <- c("Active", "Repressive")
+n_per_group <- 220
+
+cell_offsets <- c(
+  Exc = 0.000,
+  Inh = 0.004,
+  Ast = 0.002,
+  Oli = 0.006,
+  OPC = 0.003,
+  `Mic/Immune` = -0.002,
+  Vasc = 0.004
+)
+
+violin_data <- bind_rows(lapply(seq_along(cell_types), function(i) {
+  cell_type <- cell_types[i]
+  offset <- unname(cell_offsets[cell_type])
+
+  bind_rows(
+    data.frame(
+      cell_type = cell_type,
+      compartment = "Active",
+      at_content = rnorm(n_per_group, mean = 0.575 + offset, sd = 0.032)
+    ),
+    data.frame(
+      cell_type = cell_type,
+      compartment = "Repressive",
+      at_content = rnorm(n_per_group, mean = 0.624 + offset / 2, sd = 0.024)
+    )
+  )
+})) |>
+  mutate(
+    at_content = pmin(pmax(at_content, 0.38), 0.685),
+    cell_type = factor(cell_type, levels = cell_types),
+    compartment = factor(compartment, levels = compartments),
+    x = as.integer(cell_type),
+    split_group = 2 * (x - 1) + as.integer(compartment)
+  )
+
+write.csv(
+  violin_data |>
+    select(cell_type, compartment, at_content),
+  "synthetic_at_content.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+
+head(violin_data)
+```
+
+## 自定义左右分裂小提琴几何对象
+
+```{r split-violin-geom}
+GeomSplitViolin <- ggproto(
+  "GeomSplitViolin",
+  GeomViolin,
+  draw_group = function(self, data, panel_scales, coord) {
+    data <- transform(
+      data,
+      xminv = x - violinwidth * (x - xmin),
+      xmaxv = x + violinwidth * (xmax - x)
+    )
+
+    group_number <- data$group[1]
+    new_data <- transform(
+      data,
+      x = if (group_number %% 2 == 1) xminv else xmaxv
+    )
+
+    if (group_number %% 2 == 1) {
+      new_data <- new_data[order(new_data$y), ]
+    } else {
+      new_data <- new_data[order(-new_data$y), ]
+    }
+
+    new_data <- rbind(
+      new_data[1, ],
+      new_data,
+      new_data[nrow(new_data), ],
+      new_data[1, ]
+    )
+    new_data[c(1, nrow(new_data) - 1, nrow(new_data)), "x"] <- round(data$x[1])
+
+    GeomPolygon$draw_panel(new_data, panel_scales, coord)
+  }
+)
+
+geom_split_violin <- function(mapping = NULL, data = NULL,
+                              stat = "ydensity", position = "identity",
+                              ..., trim = TRUE, scale = "area",
+                              na.rm = FALSE, show.legend = NA,
+                              inherit.aes = TRUE) {
+  layer(
+    data = data,
+    mapping = mapping,
+    stat = stat,
+    geom = GeomSplitViolin,
+    position = position,
+    show.legend = show.legend,
+    inherit.aes = inherit.aes,
+    params = list(
+      trim = trim,
+      scale = scale,
+      na.rm = na.rm,
+      ...
+    )
+  )
+}
+```
+
+## 统计汇总和显著性检验
+
+```{r statistics}
+summary_data <- violin_data |>
+  group_by(cell_type, compartment) |>
+  summarise(
+    median = median(at_content),
+    q25 = quantile(at_content, 0.25),
+    q75 = quantile(at_content, 0.75),
+    .groups = "drop"
+  ) |>
+  mutate(
+    x = as.integer(cell_type) + if_else(compartment == "Active", -0.12, 0.12)
+  )
+
+significance_data <- bind_rows(lapply(seq_along(cell_types), function(i) {
+  cell_type <- cell_types[i]
+  cell_subset <- violin_data |>
+    filter(as.character(.data$cell_type) == cell_type)
+
+  p_value <- t.test(
+    at_content ~ compartment,
+    data = cell_subset
+  )$p.value
+
+  data.frame(
+    cell_type = cell_type,
+    x = i,
+    p_value = p_value,
+    label = ifelse(p_value < 2.2e-16, "< 2.2e−16", format(p_value, digits = 2))
+  )
+}))
+
+cell_strip_palette <- c(
+  Exc = "#16A249",
+  Inh = "#79B85A",
+  Ast = "#D9232B",
+  Oli = "#F0A047",
+  OPC = "#A85D3C",
+  `Mic/Immune` = "#C4ADD3",
+  Vasc = "#E5ADCA"
+)
+
+strip_data <- data.frame(
+  cell_type = cell_types,
+  x = seq_along(cell_types),
+  xmin = seq_along(cell_types) - 0.47,
+  xmax = seq_along(cell_types) + 0.47,
+  ymin = 0.722,
+  ymax = 0.752,
+  strip_colour = unname(cell_strip_palette[cell_types])
+)
+
+baseline_data <- data.frame(
+  x = seq_along(cell_types),
+  xend = seq_along(cell_types),
+  xmin = seq_along(cell_types) - 0.43,
+  xmax = seq_along(cell_types) + 0.43,
+  y = 0.35
+)
+```
+
+## 绘图
+
+```{r split-violin-plot}
+compartment_palette <- c(
+  Active = "#E7A6C4",
+  Repressive = "#0B4B96"
+)
+
+p <- ggplot(
+  violin_data,
+  aes(
+    x = x,
+    y = at_content,
+    fill = compartment,
+    group = split_group
+  )
+) +
+  geom_split_violin(
+    trim = FALSE,
+    width = 0.82,
+    colour = NA,
+    alpha = 0.98
+  ) +
+  geom_linerange(
+    data = summary_data,
+    aes(x = x, ymin = q25, ymax = q75),
+    inherit.aes = FALSE,
+    colour = "white",
+    linewidth = 1.05
+  ) +
+  geom_point(
+    data = summary_data,
+    aes(x = x, y = median),
+    inherit.aes = FALSE,
+    shape = 21,
+    size = 2.45,
+    stroke = 0.35,
+    fill = "white",
+    colour = "white"
+  ) +
+  geom_segment(
+    data = baseline_data,
+    aes(x = xmin, xend = xmax, y = y, yend = y),
+    inherit.aes = FALSE,
+    colour = "black",
+    linewidth = 0.7
+  ) +
+  geom_segment(
+    data = significance_data,
+    aes(x = x - 0.25, xend = x + 0.25, y = 0.695, yend = 0.695),
+    inherit.aes = FALSE,
+    linewidth = 0.48,
+    colour = "black"
+  ) +
+  geom_segment(
+    data = significance_data,
+    aes(x = x - 0.25, xend = x - 0.25, y = 0.686, yend = 0.695),
+    inherit.aes = FALSE,
+    linewidth = 0.48,
+    colour = "black"
+  ) +
+  geom_segment(
+    data = significance_data,
+    aes(x = x + 0.25, xend = x + 0.25, y = 0.686, yend = 0.695),
+    inherit.aes = FALSE,
+    linewidth = 0.48,
+    colour = "black"
+  ) +
+  geom_text(
+    data = significance_data,
+    aes(x = x, y = 0.704, label = label),
+    inherit.aes = FALSE,
+    size = 2.7,
+    colour = "black"
+  ) +
+  geom_rect(
+    data = strip_data,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+    inherit.aes = FALSE,
+    fill = strip_data$strip_colour,
+    colour = "white",
+    linewidth = 0.65
+  ) +
+  geom_text(
+    data = strip_data,
+    aes(x = x, y = (ymin + ymax) / 2, label = cell_type),
+    inherit.aes = FALSE,
+    size = 3.25,
+    lineheight = 0.75,
+    colour = "#222222"
+  ) +
+  scale_fill_manual(
+    values = compartment_palette,
+    name = "Epigenomic\ncompartment"
+  ) +
+  scale_x_continuous(
+    limits = c(0.50, 7.50),
+    breaks = seq_along(cell_types),
+    labels = rep("", length(cell_types)),
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(
+    limits = c(0.35, 0.755),
+    breaks = seq(0.4, 0.7, by = 0.1),
+    expand = c(0, 0)
+  ) +
+  labs(
+    x = NULL,
+    y = "A/T content",
+    caption = "Synthetic demonstration · reproducible seed: 1031"
+  ) +
+  guides(
+    fill = guide_legend(
+      override.aes = list(colour = NA),
+      keyheight = grid::unit(5.2, "mm"),
+      keywidth = grid::unit(5.2, "mm")
+    )
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    axis.line.x = element_blank(),
+    axis.line.y = element_line(linewidth = 0.65),
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#222222"),
+    axis.title.y = element_text(face = "bold", margin = margin(r = 8)),
+    legend.position = "inside",
+    legend.position.inside = c(0.79, 0.20),
+    legend.justification = c(0, 0),
+    legend.title = element_text(size = 10.5, lineheight = 0.88),
+    legend.text = element_text(size = 10),
+    legend.background = element_rect(
+      fill = scales::alpha("white", 0.88),
+      colour = NA
+    ),
+    plot.caption = element_text(colour = "#6A7073", hjust = 0.5),
+    plot.margin = margin(12, 14, 10, 12)
+  )
+
+p
+
+ggsave(
+  "split_violin_plot.png",
+  p,
+  width = 10,
+  height = 6.8,
+  units = "in",
+  dpi = 320,
+  bg = "white"
+)
+```
+
+## 输出文件
+
+- `split_violin_plot.html`：自包含 R Markdown 编译结果；
+- `split_violin_plot.png`：320 dpi 高清图；
+- `synthetic_at_content.csv`：模拟 A/T content 数据；
+- `significance_results.csv`：七类细胞的显著性检验结果。
+
+```{r save-significance-results, include=FALSE}
+write.csv(
+  significance_data,
+  "significance_results.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+```
+
