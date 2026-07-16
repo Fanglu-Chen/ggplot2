@@ -1,0 +1,38 @@
+"signature","biological_category","origin","cell_cycle_enriched","index"
+"AR_Spratt","AR/SR signaling","CRPC","No",1
+"AR_Hieronymus","AR/SR signaling","Prostate cancer","No",2
+"AR_Full","AR/SR signaling","Pan cancer","No",3
+"AR_V7","AR/SR signaling","CRPC","No",4
+"Androgen_Response","AR/SR signaling","Pan cancer","No",5
+"Basal_Zhang","AR/SR signaling","Pan cancer","No",6
+"BRCA1_DDR","DNA repair","Prostate cancer","No",7
+"Homologous_Recomb","DNA repair","Pan cancer","No",8
+"DNA_Repair","DNA repair","CRPC","No",9
+"MMR","DNA repair","Breast","No",10
+"Chromatin_Remodel","DNA repair","Melanoma","No",11
+"Replication_Stress","DNA repair","CRPC","Yes",12
+"CD8_Tcell","Immune / microenvironment","Pan cancer","No",13
+"CD4_Tcell","Immune / microenvironment","Pan cancer","No",14
+"Bcell","Immune / microenvironment","Prostate cancer","No",15
+"IFN_Gamma","Immune / microenvironment","Prostate cancer","No",16
+"Inflammatory","Immune / microenvironment","Prostate cancer","No",17
+"TGFbeta","Immune / microenvironment","CRPC","No",18
+"Stromal","Immune / microenvironment","CRPC","No",19
+"Luminal_A","Lineage / plasticity","Pan cancer","No",20
+"Luminal_B","Lineage / plasticity","Breast","No",21
+"Basal","Lineage / plasticity","Breast","No",22
+"Neuroendocrine","Lineage / plasticity","Melanoma","No",23
+"EMT","Lineage / plasticity","Breast","No",24
+"Stemness","Lineage / plasticity","CRPC","No",25
+"PI3K_AKT","Oncogenic pathways","Prostate cancer","No",26
+"MAPK","Oncogenic pathways","Prostate cancer","No",27
+"MYC","Oncogenic pathways","CRPC","Yes",28
+"WNT","Oncogenic pathways","Pan cancer","No",29
+"TP53_Loss","Oncogenic pathways","Prostate cancer","No",30
+"RB_Loss","Oncogenic pathways","Pan cancer","Yes",31
+"Hypoxia","Metabolism / prognosis","Prostate cancer","No",32
+"Glycolysis","Metabolism / prognosis","Prostate cancer","No",33
+"OxPhos","Metabolism / prognosis","Melanoma","No",34
+"Proliferation","Metabolism / prognosis","Melanoma","Yes",35
+"Radiotherapy","Metabolism / prognosis","CRPC","Yes",36
+"Metastasis","Metabolism / prognosis","Pan cancer","No",37
