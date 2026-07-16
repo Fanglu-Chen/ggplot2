@@ -23,7 +23,7 @@ library(ggplot2)
 library(dplyr)
 library(scales)
 
-set.seed(20260716)
+set.seed(1031)
 ```
 
 ## 设计说明
@@ -287,7 +287,7 @@ p <- ggplot() +
     subtitle = "Synthetic country–LFP category–realm flows",
     y = "% Area with kelp",
     x = NULL,
-    caption = "Synthetic data · reproducible seed: 20260716"
+    caption = "Synthetic data · reproducible seed: 1031"
   ) +
   theme_minimal(base_size = 11) +
   theme(

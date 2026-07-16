@@ -1,33 +1,33 @@
 "country","lfp_category","n","realm","score","weight","flow_id"
-"ARG","Highly",17,"Temperate South America","Most",0.0141666666666667,1
-"ARG","Less",24,"Southern Ocean","Moderately",0.02,2
-"ARG","Moderately",24,"Temperate South America","Least",0.02,3
-"ARG","None",18,"Temperate South America","None",0.015,4
-"AUS","Highly",14,"Temperate South America","Heavily",0.0116666666666667,5
-"AUS","Less",10,"Temperate Northern Pacific","Least",0.00833333333333333,6
-"AUS","Moderately",8,"Southern Ocean","Moderately",0.00666666666666667,7
-"AUS","None",6,"Southern Ocean","None",0.005,8
-"CHL","Highly",27,"Temperate South America","Heavily",0.0225,9
-"CHL","Less",74,"Temperate South America","Moderately",0.0616666666666667,10
-"CHL","Moderately",53,"Tropical Atlantic","Loss",0.0441666666666667,11
-"CHL","None",69,"Southern Ocean","None",0.0575,12
-"FRA","Highly",12,"Tropical Atlantic","Most",0.01,13
-"FRA","Less",42,"Temperate Northern Pacific","Moderately",0.035,14
-"FRA","Moderately",10,"Temperate South America","Moderately",0.00833333333333333,15
-"FRA","None",54,"Temperate Northern Pacific","Most",0.045,16
-"GBR","Highly",22,"Temperate Northern Pacific","None",0.0183333333333333,17
-"GBR","Less",105,"Temperate Northern Pacific","None",0.0875,18
-"GBR","Moderately",53,"Temperate Northern Pacific","Heavily",0.0441666666666667,19
-"GBR","None",186,"Temperate South America","Most",0.155,20
-"MEX","Highly",12,"Temperate Northern Pacific","Most",0.01,21
-"MEX","Less",37,"Temperate Northern Pacific","Loss",0.0308333333333333,22
-"MEX","Moderately",27,"Temperate Northern Pacific","Moderately",0.0225,23
-"MEX","None",26,"Temperate South America","None",0.0216666666666667,24
-"NZL","Highly",12,"Temperate South America","Least",0.01,25
-"NZL","Less",3,"Temperate Northern Pacific","None",0.0025,26
-"NZL","Moderately",6,"Temperate South America","Moderately",0.005,27
-"NZL","None",7,"Temperate South America","None",0.00583333333333333,28
-"USA","Highly",22,"Temperate Northern Pacific","Most",0.0183333333333333,29
-"USA","Less",66,"Tropical Atlantic","None",0.055,30
-"USA","Moderately",46,"Temperate Northern Pacific","Moderately",0.0383333333333333,31
-"USA","None",108,"Tropical Atlantic","Loss",0.09,32
+"ARG","Highly",15,"Temperate South America","Moderately",0.0125,1
+"ARG","Less",13,"Southern Ocean","Moderately",0.0108333333333333,2
+"ARG","Moderately",26,"Southern Ocean","Most",0.0216666666666667,3
+"ARG","None",11,"Temperate South America","None",0.00916666666666667,4
+"AUS","Highly",18,"Southern Ocean","Most",0.015,5
+"AUS","Less",14,"Tropical Atlantic","Least",0.0116666666666667,6
+"AUS","Moderately",10,"Temperate Northern Pacific","Most",0.00833333333333333,7
+"AUS","None",2,"Southern Ocean","None",0.00166666666666667,8
+"CHL","Highly",38,"Temperate South America","Heavily",0.0316666666666667,9
+"CHL","Less",58,"Temperate South America","Least",0.0483333333333333,10
+"CHL","Moderately",49,"Temperate South America","Most",0.0408333333333333,11
+"CHL","None",70,"Temperate South America","None",0.0583333333333333,12
+"FRA","Highly",12,"Tropical Atlantic","Loss",0.01,13
+"FRA","Less",36,"Temperate South America","Least",0.03,14
+"FRA","Moderately",24,"Tropical Atlantic","Moderately",0.02,15
+"FRA","None",44,"Temperate South America","None",0.0366666666666667,16
+"GBR","Highly",16,"Temperate Northern Pacific","Heavily",0.0133333333333333,17
+"GBR","Less",113,"Temperate Northern Pacific","Least",0.0941666666666667,18
+"GBR","Moderately",51,"Southern Ocean","Most",0.0425,19
+"GBR","None",176,"Tropical Atlantic","None",0.146666666666667,20
+"MEX","Highly",10,"Tropical Atlantic","Heavily",0.00833333333333333,21
+"MEX","Less",37,"Tropical Atlantic","Loss",0.0308333333333333,22
+"MEX","Moderately",26,"Temperate South America","Least",0.0216666666666667,23
+"MEX","None",26,"Temperate Northern Pacific","None",0.0216666666666667,24
+"NZL","Highly",15,"Southern Ocean","Moderately",0.0125,25
+"NZL","Less",5,"Southern Ocean","Least",0.00416666666666667,26
+"NZL","Moderately",2,"Temperate South America","Moderately",0.00166666666666667,27
+"NZL","None",5,"Temperate South America","None",0.00416666666666667,28
+"USA","Highly",20,"Southern Ocean","Least",0.0166666666666667,29
+"USA","Less",75,"Temperate Northern Pacific","Most",0.0625,30
+"USA","Moderately",67,"Tropical Atlantic","Heavily",0.0558333333333333,31
+"USA","None",116,"Temperate South America","None",0.0966666666666667,32
