@@ -159,7 +159,7 @@ render_circular_lollipop <- function() {
 
   circos.par(
     start.degree = 94,
-    gap.degree = 2.8,
+    gap.after = c(rep(2.8, length(category_names) - 1), 12),
     track.margin = c(0.006, 0.006),
     cell.padding = c(0, 0, 0, 0),
     points.overflow.warning = FALSE,
@@ -282,22 +282,14 @@ render_circular_lollipop <- function() {
           lwd = 0.55,
           col = "#4D5558"
         )
-        circos.rect(
-          CELL_META$xlim[1] + 0.08,
-          0.20,
-          CELL_META$xlim[1] + 0.62,
-          0.80,
-          col = adjustcolor("white", alpha.f = 0.94),
-          border = NA
-        )
         circos.text(
-          CELL_META$xlim[1] + 0.35,
+          CELL_META$xlim[1] - 0.72,
           0.50,
           "Selection score",
           facing = "clockwise",
           niceFacing = TRUE,
           adj = c(0.5, 0.5),
-          cex = 0.42,
+          cex = 0.44,
           font = 2,
           col = "#3F4648"
         )
