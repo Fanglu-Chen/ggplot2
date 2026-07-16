@@ -1,0 +1,369 @@
+---
+title: "环形多疾病棒棒糖图：模拟数据复现"
+author: "Fanglu-Chen"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    self_contained: true
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width = 11,
+  fig.height = 11,
+  dpi = 170
+)
+
+library(circlize)
+library(dplyr)
+
+set.seed(1031)
+```
+
+## 设计说明
+
+本例使用模拟数据复现参考图中的环形多性状棒棒糖布局。十二个疾病领域排列在灰色分区环中；径向线段和端点表示基因的 selection score；蓝色表示保护性关联，橙色表示风险关联；中心弦线表示跨疾病领域的模拟共享关联。
+
+> 所有数据均为绘图演示用途，不代表真实医学结论。
+
+## 模拟基因评分数据
+
+```{r simulate-gene-data}
+gene_sets <- list(
+  `Type 2 diabetes` = c("ADIPOQ", "GCK", "KCNJ11", "IGF2", "PPARG"),
+  `Prostate cancer` = c("HPC1", "MSR1", "RNASEL", "BRCA1", "HOXB13"),
+  `Premature mortality` = c("GDF15", "NFE2L2", "FOXO3", "HAVCR1", "NLRP3"),
+  COPD = c("DPP9", "CXCL17", "CDON", "IL31", "CDC42"),
+  `Lung cancer` = c("CXCL13", "GDF5", "FGF10", "MMP9", "LAMP3"),
+  `Renal disease` = c("UMOD", "LAMB2", "NPHS1", "APOL1", "MANBA"),
+  `Heart failure` = c("NPPB", "GNAS", "RNASE4", "FURIN", "TIMP1"),
+  `Alzheimer's disease` = c("APOE", "CLU", "CR1", "BIN1", "PICALM"),
+  Glaucoma = c("PITX2", "TPBG", "VEGFA", "ANGPT1", "IL23"),
+  `Breast cancer` = c("CTAG1A", "BRCA2", "ESR1", "GABRA2", "GBP4"),
+  `Acute pancreatitis` = c("CLSTN3", "ZP1", "MZB1", "LRIG3", "PRSS1"),
+  Multimorbidity = c("WFDC2", "PLXNB2", "EDA2R", "CKAP4", "GDF3")
+)
+
+category_names <- names(gene_sets)
+
+gene_data <- bind_rows(lapply(seq_along(gene_sets), function(i) {
+  data.frame(
+    category = category_names[i],
+    category_id = i,
+    gene = gene_sets[[i]],
+    gene_index = seq_along(gene_sets[[i]])
+  )
+})) |>
+  group_by(category) |>
+  mutate(
+    score = sort(
+      runif(n(), 0.10, 0.98),
+      decreasing = first(category_id) %% 2 == 0
+    )
+  ) |>
+  ungroup() |>
+  mutate(
+    direction = if_else(runif(n()) < 0.31, "Risk", "Protective"),
+    gene_id = row_number(),
+    category = factor(category, levels = category_names)
+  )
+
+# 保证两类颜色在圆周各部分均有代表，同时保持结果可重复。
+gene_data$direction[c(3, 14, 27, 38, 49, 58)] <- "Risk"
+gene_data$direction[c(8, 20, 32, 44, 55)] <- "Protective"
+
+association_palette <- c(
+  Protective = "#0B5C8E",
+  Risk = "#E78668"
+)
+
+write.csv(
+  gene_data |>
+    select(category, gene, score, direction, gene_index),
+  "synthetic_gene_scores.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+
+head(gene_data)
+```
+
+## 模拟跨疾病连接
+
+```{r simulate-connections}
+set.seed(1031)
+n_links <- 36
+from_ids <- sample(gene_data$gene_id, n_links, replace = FALSE)
+to_ids <- sample(gene_data$gene_id, n_links, replace = TRUE)
+
+for (i in seq_len(n_links)) {
+  from_category <- as.character(gene_data$category[gene_data$gene_id == from_ids[i]])
+  to_category <- as.character(gene_data$category[gene_data$gene_id == to_ids[i]])
+
+  while (from_category == to_category || from_ids[i] == to_ids[i]) {
+    to_ids[i] <- sample(gene_data$gene_id, 1)
+    to_category <- as.character(gene_data$category[gene_data$gene_id == to_ids[i]])
+  }
+}
+
+connections <- data.frame(
+  link_id = seq_len(n_links),
+  from_id = from_ids,
+  to_id = to_ids
+) |>
+  left_join(
+    gene_data |>
+      transmute(
+        from_id = gene_id,
+        from_gene = gene,
+        from_category = as.character(category),
+        from_x = gene_index
+      ),
+    by = "from_id"
+  ) |>
+  left_join(
+    gene_data |>
+      transmute(
+        to_id = gene_id,
+        to_gene = gene,
+        to_category = as.character(category),
+        to_x = gene_index
+      ),
+    by = "to_id"
+  )
+
+write.csv(
+  connections |>
+    select(link_id, from_gene, from_category, to_gene, to_category),
+  "synthetic_connections.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+
+head(connections)
+```
+
+## 环形绘图函数
+
+```{r plot-function}
+render_circular_lollipop <- function() {
+  circos.clear()
+  on.exit(circos.clear(), add = TRUE)
+
+  par(mar = c(2.8, 1.2, 3.6, 1.2), xpd = NA)
+
+  circos.par(
+    start.degree = 94,
+    gap.degree = 2.8,
+    track.margin = c(0.006, 0.006),
+    cell.padding = c(0, 0, 0, 0),
+    points.overflow.warning = FALSE,
+    canvas.xlim = c(-1.10, 1.10),
+    canvas.ylim = c(-1.10, 1.10)
+  )
+
+  sector_limits <- cbind(
+    rep(0.35, length(category_names)),
+    lengths(gene_sets) + 0.65
+  )
+
+  circos.initialize(
+    factors = category_names,
+    xlim = sector_limits
+  )
+
+  # 外圈：基因标签和短引线。
+  circos.trackPlotRegion(
+    ylim = c(0, 1),
+    track.height = 0.20,
+    bg.border = NA,
+    panel.fun = function(x, y) {
+      sector <- CELL_META$sector.index
+      sector_genes <- gene_data |>
+        filter(as.character(category) == sector)
+
+      for (i in seq_len(nrow(sector_genes))) {
+        colour <- association_palette[sector_genes$direction[i]]
+        position <- sector_genes$gene_index[i]
+
+        circos.segments(
+          position, 0.02, position, 0.18,
+          col = adjustcolor(colour, alpha.f = 0.72),
+          lwd = 0.65
+        )
+        circos.text(
+          position, 0.22,
+          sector_genes$gene[i],
+          facing = "clockwise",
+          niceFacing = TRUE,
+          adj = c(0, 0.5),
+          cex = 0.49,
+          font = 2,
+          col = colour
+        )
+      }
+    }
+  )
+
+  # 灰色疾病分区环。
+  circos.trackPlotRegion(
+    ylim = c(0, 1),
+    track.height = 0.095,
+    bg.col = "#F0F1F1",
+    bg.border = "#62696C",
+    bg.lwd = 0.9,
+    panel.fun = function(x, y) {
+      circos.text(
+        CELL_META$xcenter,
+        CELL_META$ycenter,
+        CELL_META$sector.index,
+        facing = "bending.inside",
+        niceFacing = TRUE,
+        cex = 0.52,
+        font = 2,
+        col = "#343A3C"
+      )
+    }
+  )
+
+  # 内圈：selection score 网格、径向棒和端点。
+  circos.trackPlotRegion(
+    ylim = c(0, 1),
+    track.height = 0.30,
+    bg.col = "white",
+    bg.border = "#6D7476",
+    bg.lwd = 0.75,
+    panel.fun = function(x, y) {
+      sector <- CELL_META$sector.index
+      sector_genes <- gene_data |>
+        filter(as.character(category) == sector)
+
+      for (grid_value in seq(0.2, 1, by = 0.2)) {
+        circos.lines(
+          CELL_META$xlim,
+          c(grid_value, grid_value),
+          col = "#D8DCDD",
+          lwd = 0.45,
+          lty = 3
+        )
+      }
+
+      for (i in seq_len(nrow(sector_genes))) {
+        colour <- association_palette[sector_genes$direction[i]]
+        position <- sector_genes$gene_index[i]
+        score <- sector_genes$score[i]
+
+        circos.segments(
+          position, 0,
+          position, score,
+          col = adjustcolor(colour, alpha.f = 0.72),
+          lwd = 0.75
+        )
+        circos.points(
+          position, score,
+          pch = 16,
+          cex = 0.58,
+          col = colour
+        )
+      }
+
+      if (sector == category_names[1]) {
+        circos.yaxis(
+          side = "left",
+          at = seq(0.2, 1, by = 0.2),
+          labels = sprintf("%.1f", seq(0.2, 1, by = 0.2)),
+          labels.cex = 0.40,
+          tick.length = convert_x(0.08, "mm"),
+          lwd = 0.55,
+          col = "#4D5558"
+        )
+        circos.text(
+          CELL_META$xlim[1] - 0.48,
+          0.50,
+          "Selection score",
+          facing = "clockwise",
+          niceFacing = TRUE,
+          cex = 0.45,
+          font = 2,
+          col = "#3F4648"
+        )
+      }
+    }
+  )
+
+  # 中心跨疾病弦线。
+  for (i in seq_len(nrow(connections))) {
+    link_colour <- if (i %% 5 == 0) {
+      adjustcolor("#0B5C8E", alpha.f = 0.32)
+    } else {
+      adjustcolor("#274B50", alpha.f = 0.43)
+    }
+
+    circos.link(
+      connections$from_category[i],
+      c(connections$from_x[i] - 0.032, connections$from_x[i] + 0.032),
+      connections$to_category[i],
+      c(connections$to_x[i] - 0.032, connections$to_x[i] + 0.032),
+      col = link_colour,
+      border = NA,
+      h.ratio = 0.58
+    )
+  }
+
+  title(
+    main = "Circular Multi-trait Lollipop Plot",
+    line = 1.50,
+    cex.main = 1.25,
+    font.main = 2,
+    col.main = "#252A2C"
+  )
+  mtext(
+    "Synthetic biomarker associations across 12 disease domains",
+    side = 3,
+    line = 0.05,
+    cex = 0.72,
+    col = "#5B6265"
+  )
+
+  legend(
+    "bottom",
+    inset = -0.018,
+    legend = c("Protective", "Risk"),
+    col = association_palette[c("Protective", "Risk")],
+    pch = 16,
+    pt.cex = 0.85,
+    horiz = TRUE,
+    bty = "n",
+    cex = 0.75,
+    title = "Association"
+  )
+}
+```
+
+## 绘图并导出
+
+```{r circular-lollipop, fig.width=11, fig.height=11}
+render_circular_lollipop()
+
+png(
+  "circular_lollipop.png",
+  width = 3520,
+  height = 3520,
+  res = 320,
+  bg = "white"
+)
+render_circular_lollipop()
+dev.off()
+```
+
+## 输出文件
+
+- `circular_lollipop.html`：自包含 R Markdown 编译结果；
+- `circular_lollipop.png`：320 dpi 高清图片；
+- `synthetic_gene_scores.csv`：模拟基因 selection score；
+- `synthetic_connections.csv`：模拟跨疾病连接。

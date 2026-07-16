@@ -1,0 +1,61 @@
+"category","gene","score","direction","gene_index"
+"Type 2 diabetes","ADIPOQ",0.182886161897331,"Protective",1
+"Type 2 diabetes","GCK",0.227471555918455,"Protective",2
+"Type 2 diabetes","KCNJ11",0.29600967284292,"Risk",3
+"Type 2 diabetes","IGF2",0.445078615676612,"Protective",4
+"Type 2 diabetes","PPARG",0.628911741729826,"Risk",5
+"Prostate cancer","HPC1",0.741173611786216,"Protective",1
+"Prostate cancer","MSR1",0.379211014416069,"Protective",2
+"Prostate cancer","RNASEL",0.345709231644869,"Protective",3
+"Prostate cancer","BRCA1",0.18629425553605,"Risk",4
+"Prostate cancer","HOXB13",0.145844802856445,"Protective",5
+"Premature mortality","GDF15",0.249501589983702,"Protective",1
+"Premature mortality","NFE2L2",0.637789537198842,"Risk",2
+"Premature mortality","FOXO3",0.818250695373863,"Protective",3
+"Premature mortality","HAVCR1",0.854598674289882,"Risk",4
+"Premature mortality","NLRP3",0.883137866314501,"Risk",5
+"COPD","DPP9",0.814882401805371,"Protective",1
+"COPD","CXCL17",0.76964177466929,"Risk",2
+"COPD","CDON",0.499192408975214,"Protective",3
+"COPD","IL31",0.355807955991477,"Risk",4
+"COPD","CDC42",0.279218512084335,"Protective",5
+"Lung cancer","CXCL13",0.268850387260318,"Protective",1
+"Lung cancer","GDF5",0.34710952186957,"Protective",2
+"Lung cancer","FGF10",0.587357367184013,"Protective",3
+"Lung cancer","MMP9",0.944161217957735,"Protective",4
+"Lung cancer","LAMP3",0.970434708055109,"Protective",5
+"Renal disease","UMOD",0.410886395629495,"Risk",1
+"Renal disease","LAMB2",0.37102260902524,"Risk",2
+"Renal disease","NPHS1",0.266040047854185,"Protective",3
+"Renal disease","APOL1",0.242178291007876,"Protective",4
+"Renal disease","MANBA",0.125454952940345,"Protective",5
+"Heart failure","NPPB",0.363573986440897,"Protective",1
+"Heart failure","GNAS",0.370870627053082,"Protective",2
+"Heart failure","RNASE4",0.451276354324073,"Protective",3
+"Heart failure","FURIN",0.589880247637629,"Protective",4
+"Heart failure","TIMP1",0.819393773060292,"Risk",5
+"Alzheimer's disease","APOE",0.873645022176206,"Risk",1
+"Alzheimer's disease","CLU",0.684493894539773,"Risk",2
+"Alzheimer's disease","CR1",0.566615273635834,"Risk",3
+"Alzheimer's disease","BIN1",0.490800153054297,"Risk",4
+"Alzheimer's disease","PICALM",0.3745787271671,"Risk",5
+"Glaucoma","PITX2",0.734369503036141,"Protective",1
+"Glaucoma","TPBG",0.852678324691951,"Protective",2
+"Glaucoma","VEGFA",0.880529917795211,"Risk",3
+"Glaucoma","ANGPT1",0.883110360726714,"Protective",4
+"Glaucoma","IL23",0.91739804090932,"Protective",5
+"Breast cancer","CTAG1A",0.917351535167545,"Protective",1
+"Breast cancer","BRCA2",0.742307866867632,"Risk",2
+"Breast cancer","ESR1",0.591776148620993,"Risk",3
+"Breast cancer","GABRA2",0.493117136321962,"Risk",4
+"Breast cancer","GBP4",0.127676869463176,"Protective",5
+"Acute pancreatitis","CLSTN3",0.243263661358505,"Risk",1
+"Acute pancreatitis","ZP1",0.493708409033716,"Risk",2
+"Acute pancreatitis","MZB1",0.60676476676017,"Risk",3
+"Acute pancreatitis","LRIG3",0.784804020486772,"Protective",4
+"Acute pancreatitis","PRSS1",0.808928507380188,"Protective",5
+"Multimorbidity","WFDC2",0.822143144495785,"Protective",1
+"Multimorbidity","PLXNB2",0.696026677601039,"Risk",2
+"Multimorbidity","EDA2R",0.685209746081382,"Risk",3
+"Multimorbidity","CKAP4",0.513889159932733,"Risk",4
+"Multimorbidity","GDF3",0.469822995066643,"Risk",5
