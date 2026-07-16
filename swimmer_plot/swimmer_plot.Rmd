@@ -1,0 +1,363 @@
+---
+title: "肿瘤治疗泳道图：模拟数据复现"
+author: "Fanglu-Chen"
+date: "`r format(Sys.Date(), '%Y-%m-%d')`"
+output:
+  html_document:
+    self_contained: true
+    toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width = 12,
+  fig.height = 11,
+  dpi = 170
+)
+
+library(ggplot2)
+library(dplyr)
+
+set.seed(1031)
+```
+
+## 设计说明
+
+本例使用模拟数据复现临床研究中的 swimmer plot（泳道图）。每一行代表一名患者；横向泳道表示治疗和随访时间；点形表示最佳疗效与临床事件；左侧五列方块表示患者既往治疗和分子特征。
+
+> 数据仅用于演示绘图方法，不代表真实临床研究结果。
+
+## 模拟患者数据
+
+```{r simulate-patients}
+n_patients <- 48
+
+patients <- data.frame(
+  patient_id = sprintf("P%02d", seq_len(n_patients)),
+  follow_up = pmin(round(rgamma(n_patients, shape = 2.25, scale = 12.5) + 4, 1), 88),
+  ongoing = runif(n_patients) < 0.30,
+  prior_platinum = sample(c("No", "Yes"), n_patients, replace = TRUE,
+                          prob = c(0.40, 0.60)),
+  endocrine_tx = sample(c("AI", "SERD"), n_patients, replace = TRUE,
+                        prob = c(0.58, 0.42)),
+  cdk_inhibitor = sample(c("Abemaciclib", "Palbociclib", "Ribociclib"),
+                         n_patients, replace = TRUE,
+                         prob = c(0.33, 0.43, 0.24)),
+  loh_status = sample(c("All LOH", "Partial LOH", "Not evaluable"),
+                      n_patients, replace = TRUE,
+                      prob = c(0.42, 0.38, 0.20)),
+  tx_line = sample(c("1", "2", ">2"), n_patients, replace = TRUE,
+                   prob = c(0.25, 0.42, 0.33))
+)
+
+# 增加少量长随访患者，使整体轮廓接近参考图。
+long_follow_up <- sample(seq_len(n_patients), 5)
+patients$follow_up[long_follow_up] <- c(65, 72, 79, 84, 88)
+patients$ongoing[long_follow_up[c(2, 4, 5)]] <- TRUE
+
+patients <- patients |>
+  arrange(desc(follow_up)) |>
+  mutate(y = row_number())
+
+write.csv(
+  patients,
+  "synthetic_patient_summary.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+
+head(patients)
+```
+
+## 生成治疗区间和事件标记
+
+```{r treatment-and-events}
+treatment_rows <- list()
+response_rows <- list()
+event_rows <- list()
+
+for (i in seq_len(nrow(patients))) {
+  patient <- patients[i, ]
+  first_treatment <- sample(
+    c("PARP inhibitor", "Chemotherapy"),
+    1,
+    prob = c(0.62, 0.38)
+  )
+
+  has_switch <- patient$follow_up > 13 && runif(1) < 0.34
+
+  if (has_switch) {
+    switch_time <- round(runif(
+      1,
+      max(4, patient$follow_up * 0.22),
+      max(7, patient$follow_up * 0.68)
+    ), 1)
+    second_treatment <- ifelse(
+      first_treatment == "PARP inhibitor",
+      "Chemotherapy",
+      "PARP inhibitor"
+    )
+
+    treatment_rows[[length(treatment_rows) + 1]] <- data.frame(
+      patient_id = patient$patient_id,
+      y = patient$y,
+      start = 0,
+      end = switch_time,
+      treatment = first_treatment
+    )
+    treatment_rows[[length(treatment_rows) + 1]] <- data.frame(
+      patient_id = patient$patient_id,
+      y = patient$y,
+      start = switch_time,
+      end = patient$follow_up,
+      treatment = second_treatment
+    )
+    event_rows[[length(event_rows) + 1]] <- data.frame(
+      patient_id = patient$patient_id,
+      y = patient$y,
+      time = switch_time,
+      marker = "Treatment switch"
+    )
+  } else {
+    treatment_rows[[length(treatment_rows) + 1]] <- data.frame(
+      patient_id = patient$patient_id,
+      y = patient$y,
+      start = 0,
+      end = patient$follow_up,
+      treatment = first_treatment
+    )
+  }
+
+  response <- sample(
+    c("Complete response", "Partial response", "Stable disease"),
+    1,
+    prob = c(0.14, 0.52, 0.34)
+  )
+  response_time <- round(runif(1, 0.18, 0.72) * patient$follow_up, 1)
+  response_rows[[i]] <- data.frame(
+    patient_id = patient$patient_id,
+    y = patient$y,
+    time = response_time,
+    marker = response
+  )
+
+  if (!patient$ongoing && runif(1) < 0.68) {
+    event_rows[[length(event_rows) + 1]] <- data.frame(
+      patient_id = patient$patient_id,
+      y = patient$y,
+      time = patient$follow_up,
+      marker = "Disease progression"
+    )
+  }
+}
+
+treatment_intervals <- bind_rows(treatment_rows)
+response_markers <- bind_rows(response_rows)
+event_markers <- bind_rows(event_rows)
+clinical_markers <- bind_rows(response_markers, event_markers)
+
+last_treatment <- treatment_intervals |>
+  group_by(patient_id) |>
+  slice_max(end, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  select(patient_id, treatment)
+
+ongoing_patients <- patients |>
+  filter(ongoing) |>
+  left_join(last_treatment, by = "patient_id") |>
+  mutate(arrow_start = pmax(follow_up - 0.9, 0))
+
+write.csv(
+  treatment_intervals,
+  "synthetic_treatment_intervals.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+write.csv(
+  clinical_markers,
+  "synthetic_clinical_markers.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+```
+
+## 整理左侧患者特征方块
+
+```{r feature-tiles}
+feature_positions <- c(
+  `Prior platinum` = -11.0,
+  `Endocrine Tx` = -8.8,
+  `CDK inhibitor` = -6.6,
+  `LOH status` = -4.4,
+  `Tx line` = -2.2
+)
+
+feature_tiles <- bind_rows(
+  patients |>
+    transmute(patient_id, y, feature = "Prior platinum", value = prior_platinum),
+  patients |>
+    transmute(patient_id, y, feature = "Endocrine Tx", value = endocrine_tx),
+  patients |>
+    transmute(patient_id, y, feature = "CDK inhibitor", value = cdk_inhibitor),
+  patients |>
+    transmute(patient_id, y, feature = "LOH status", value = loh_status),
+  patients |>
+    transmute(patient_id, y, feature = "Tx line", value = tx_line)
+) |>
+  mutate(
+    x = unname(feature_positions[feature]),
+    tile_key = paste(feature, value, sep = ": ")
+  )
+
+feature_palette <- c(
+  `Prior platinum: No` = "#E7E8E6",
+  `Prior platinum: Yes` = "#68A88C",
+  `Endocrine Tx: AI` = "#D6C6E8",
+  `Endocrine Tx: SERD` = "#BA7FA7",
+  `CDK inhibitor: Abemaciclib` = "#E6817A",
+  `CDK inhibitor: Palbociclib` = "#F0C1A8",
+  `CDK inhibitor: Ribociclib` = "#CF5A75",
+  `LOH status: All LOH` = "#4C9A8B",
+  `LOH status: Partial LOH` = "#E8D98C",
+  `LOH status: Not evaluable` = "#FFFFFF",
+  `Tx line: 1` = "#ECEDEB",
+  `Tx line: 2` = "#AAB9C8",
+  `Tx line: >2` = "#477E83"
+)
+
+```
+
+## 绘制泳道图
+
+```{r swimmer-plot}
+treatment_palette <- c(
+  `PARP inhibitor` = "#5278A8",
+  Chemotherapy = "#D96F73"
+)
+
+marker_shapes <- c(
+  `Complete response` = 21,
+  `Partial response` = 24,
+  `Stable disease` = 22,
+  `Disease progression` = 23,
+  `Treatment switch` = 4
+)
+
+p <- ggplot() +
+  geom_segment(
+    data = patients,
+    aes(x = 0, xend = follow_up, y = y, yend = y),
+    colour = "#D8D9DA",
+    linewidth = 3.4,
+    lineend = "butt"
+  ) +
+  geom_segment(
+    data = treatment_intervals,
+    aes(x = start, xend = end, y = y, yend = y, colour = treatment),
+    linewidth = 3.15,
+    alpha = 0.82,
+    lineend = "butt"
+  ) +
+  geom_segment(
+    data = ongoing_patients,
+    aes(x = arrow_start, xend = follow_up, y = y, yend = y),
+    colour = "#253A4A",
+    linewidth = 0.55,
+    arrow = grid::arrow(length = grid::unit(1.7, "mm"), type = "closed")
+  ) +
+  geom_tile(
+    data = feature_tiles,
+    aes(x = x, y = y, fill = tile_key),
+    width = 1.52,
+    height = 0.72,
+    colour = "#646C70",
+    linewidth = 0.28
+  ) +
+  geom_point(
+    data = clinical_markers,
+    aes(x = time, y = y, shape = marker),
+    size = 2.05,
+    stroke = 0.75,
+    colour = "#263F50",
+    fill = "white"
+  ) +
+  scale_colour_manual(
+    values = treatment_palette,
+    name = "Treatment"
+  ) +
+  scale_fill_manual(
+    values = feature_palette,
+    name = "Patient features"
+  ) +
+  scale_shape_manual(
+    values = marker_shapes,
+    name = "Clinical markers"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 90, by = 10),
+    limits = c(-13.2, 91),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  scale_y_continuous(
+    breaks = patients$y,
+    labels = patients$patient_id,
+    limits = c(0.3, n_patients + 2.0),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  labs(
+    title = "Swimmer Plot of Treatment Duration and Clinical Response",
+    subtitle = "Synthetic cohort of 48 patients",
+    x = "Time (months)",
+    y = NULL,
+    caption = "Synthetic demonstration · reproducible seed: 1031"
+  ) +
+  guides(
+    colour = guide_legend(order = 1, nrow = 1, override.aes = list(linewidth = 4)),
+    shape = guide_legend(order = 2, nrow = 1),
+    fill = guide_legend(order = 3, nrow = 2, byrow = TRUE)
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", size = 17),
+    plot.subtitle = element_text(colour = "#5A6266"),
+    axis.title.x = element_text(face = "bold", margin = margin(t = 8)),
+    axis.text.x = element_text(colour = "#222222"),
+    axis.text.y = element_text(colour = "#40474A", size = 6.5),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_line(colour = "#E2E5E6", linewidth = 0.35),
+    legend.position = "bottom",
+    legend.box = "vertical",
+    legend.box.just = "left",
+    legend.title = element_text(face = "bold", size = 8),
+    legend.text = element_text(size = 7),
+    legend.key.height = grid::unit(4.5, "mm"),
+    legend.key.width = grid::unit(7.0, "mm"),
+    plot.caption = element_text(colour = "#6B7275", hjust = 0.5),
+    plot.margin = margin(14, 14, 10, 14)
+  )
+
+p
+
+ggsave(
+  "swimmer_plot.png",
+  p,
+  width = 12,
+  height = 11,
+  units = "in",
+  dpi = 320,
+  bg = "white"
+)
+```
+
+## 输出文件
+
+- `swimmer_plot.html`：自包含 R Markdown 编译结果；
+- `swimmer_plot.png`：320 dpi 高清图；
+- `synthetic_patient_summary.csv`：模拟患者特征；
+- `synthetic_treatment_intervals.csv`：模拟治疗区间；
+- `synthetic_clinical_markers.csv`：模拟疗效与事件标记。
