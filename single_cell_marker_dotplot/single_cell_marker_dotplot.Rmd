@@ -1,0 +1,183 @@
+---
+title: "Single-cell marker expression dot plot"
+output:
+  html_document:
+    self_contained: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.retina = 2
+)
+
+library(dplyr)
+library(ggplot2)
+library(tibble)
+
+set.seed(1031)
+```
+
+## Synthetic single-cell summary data
+
+```{r data}
+clusters <- c(
+  "Vasc_Peri_PDGFRB", "Vasc_Fib_GPC3", "Vasc_Cap_MFSD2A",
+  "Opc_PDGFRa", "Olig_SGCZ", "Olig_PTPRE", "Olig_EPHB2", "Olig_ARHGAP24",
+  "Micro_PRDM11", "Micro_HSPA6", "Micro_GPNMB", "Micro_FCGR1B",
+  "Micro_CR1", "Micro_CD83_WIPF1", "Micro_CD74_BTF",
+  "Glut_L6b_CTGF", "Glut_L6_THEMIS_POSTN", "Glut_L6_SULF1_SGCZ",
+  "Glut_L6_RORB_THEMIS_PXDN", "Glut_L56_NPSR1",
+  "Glut_L5_RORB_THEMIS_ADGRL4", "Glut_L5_RORB_FSHR",
+  "Glut_L5_RORB_COL22A1", "Glut_L5_RORB_CLMP_CACNG5",
+  "Glut_L23_RORB_CUX2_SYT2", "Glut_L23_RORB_CUX2_CCDC68",
+  "Glut_L23_RORB_CUX2", "Glut_L23_CUX2_LINC01500",
+  "Gaba_VIP", "Gaba_SST_PRKG2", "Gaba_SST_CHODL",
+  "Gaba_PVALB_SLCO4C1", "Gaba_PVALB_GULP1_GRIK3",
+  "Gaba_PVALB_COL15A1", "Gaba_NDNF_RELN", "Gaba_LAMP5_ROR2_LCP2",
+  "Astro_WIF1_COX8A", "Astro_SERPINH1", "Astro_CTX_WIF1_VAV3",
+  "Astro_CTX_SMAD9_RERG", "Astro_CD44_KCNQ3", "Astro_CD44_CCDC85A"
+)
+
+genes <- c(
+  "SLC17A7", "CUX2", "RORB", "CCDC68", "SYT2", "THEMIS", "COL22A1",
+  "ADGRL4", "NPSR1", "PXDN", "SGCZ", "POSTN", "GAD2", "SLC32A1",
+  "NDNF", "RELN", "LAMP5", "RPRM", "LCP2", "PVALB", "COL15A1",
+  "SST", "PRKG2", "CHODL", "VIP", "FGFR3", "WIF1", "CD44", "CCDC85A",
+  "SMAD9", "RERG", "VAV3", "SERPINH1", "MOG", "ARHGAP24", "EPHB2",
+  "PTPRE", "AIF1", "TMEM119", "P2RY12", "CD74", "CD83", "WIPF1",
+  "CR1", "FCGR1B", "GPNMB", "HSPA6", "CLDN5", "MFSD2A", "GJB2",
+  "GPC3", "PDGFRB", "MYH11"
+)
+
+category_markers <- list(
+  Vasc = c("CLDN5", "MFSD2A", "GJB2", "GPC3", "PDGFRB", "MYH11", "SERPINH1"),
+  Opc = c("MOG", "EPHB2", "PTPRE", "SGCZ", "ARHGAP24"),
+  Olig = c("MOG", "EPHB2", "PTPRE", "SGCZ", "ARHGAP24"),
+  Micro = c("AIF1", "TMEM119", "P2RY12", "CD74", "CD83", "WIPF1", "CR1", "FCGR1B", "GPNMB", "HSPA6"),
+  Glut = c("SLC17A7", "CUX2", "RORB", "CCDC68", "SYT2", "THEMIS", "COL22A1", "ADGRL4", "NPSR1", "PXDN", "SGCZ", "POSTN"),
+  Gaba = c("GAD2", "SLC32A1", "NDNF", "RELN", "LAMP5", "LCP2", "PVALB", "COL15A1", "SST", "PRKG2", "CHODL", "VIP"),
+  Astro = c("FGFR3", "WIF1", "CD44", "CCDC85A", "SMAD9", "RERG", "VAV3", "SERPINH1", "GPC3")
+)
+
+dot_data <- as_tibble(expand.grid(
+  cluster = clusters,
+  gene = genes,
+  stringsAsFactors = FALSE
+)) %>%
+  mutate(category = sub("_.*", "", cluster))
+
+dot_data$is_category_marker <- mapply(
+  function(category, gene) gene %in% category_markers[[category]],
+  dot_data$category,
+  dot_data$gene
+)
+
+dot_data$is_cluster_marker <- mapply(
+  function(cluster, gene) {
+    grepl(paste0("(^|_)", toupper(gene), "($|_)"), toupper(cluster))
+  },
+  dot_data$cluster,
+  dot_data$gene
+)
+
+off_target_hotspot <- runif(nrow(dot_data)) < 0.035
+
+dot_data <- dot_data %>%
+  mutate(
+    z_score = rnorm(n(), -0.62, 0.24) +
+      if_else(is_category_marker, rnorm(n(), 0.95, 0.24), 0) +
+      if_else(is_cluster_marker, rnorm(n(), 0.72, 0.20), 0) +
+      if_else(off_target_hotspot, runif(n(), 0.50, 1.15), 0),
+    percentage_detected = 2 + rbeta(n(), 1.25, 8.5) * 24 +
+      if_else(is_category_marker, runif(n(), 20, 43), 0) +
+      if_else(is_cluster_marker, runif(n(), 18, 30), 0) +
+      if_else(off_target_hotspot, runif(n(), 15, 36), 0),
+    z_score = pmin(2.2, pmax(-1.2, z_score)),
+    percentage_detected = pmin(82, pmax(1, percentage_detected)),
+    cluster = factor(cluster, levels = rev(clusters)),
+    gene = factor(gene, levels = genes)
+  ) %>%
+  select(cluster, gene, percentage_detected, z_score, category)
+
+write.csv(dot_data, "synthetic_marker_expression.csv", row.names = FALSE)
+
+dot_data
+```
+
+## Dot plot
+
+```{r figure, fig.width=18.5, fig.height=10.4, out.width='100%'}
+gradient_colours <- c("#2166AC", "#D9F0D3", "#F4A261", "#B2182B")
+gradient_values <- scales::rescale(c(-1.2, -0.15, 0.85, 2.2))
+
+p <- ggplot(
+  dot_data,
+  aes(x = gene, y = cluster, size = percentage_detected, colour = z_score)
+) +
+  geom_point(alpha = 0.94) +
+  scale_size_continuous(
+    name = "Percentage\ndetected",
+    range = c(0.25, 5.6),
+    limits = c(0, 82),
+    breaks = c(25, 50, 75)
+  ) +
+  scale_colour_gradientn(
+    name = "z-score of\nlog-transformed\nCPM",
+    colours = gradient_colours,
+    values = gradient_values,
+    limits = c(-1.2, 2.2),
+    breaks = c(-1, 0, 1, 2),
+    oob = scales::squish
+  ) +
+  guides(
+    size = guide_legend(
+      order = 1,
+      override.aes = list(colour = "#252525", alpha = 1)
+    ),
+    colour = guide_colourbar(
+      order = 2,
+      barheight = unit(28, "mm"),
+      barwidth = unit(5.2, "mm"),
+      ticks = FALSE,
+      frame.colour = NA
+    )
+  ) +
+  labs(x = "Gene (in Xenium data)", y = "Cluster") +
+  theme_classic(base_size = 11) +
+  theme(
+    axis.text.x = element_text(
+      angle = 90, hjust = 1, vjust = 0.5,
+      size = 8.7, colour = "#252525"
+    ),
+    axis.text.y = element_text(size = 8.8, colour = "#252525"),
+    axis.title.x = element_text(size = 11.5, margin = margin(t = 10)),
+    axis.title.y = element_text(size = 11.5, margin = margin(r = 8)),
+    axis.ticks = element_line(linewidth = 0.35),
+    axis.line = element_line(linewidth = 0.55),
+    legend.position = "right",
+    legend.box = "vertical",
+    legend.box.spacing = unit(7, "mm"),
+    legend.title = element_text(size = 10.2, lineheight = 0.95),
+    legend.text = element_text(size = 9.4),
+    plot.margin = margin(10, 12, 8, 8),
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA)
+  )
+
+ggsave(
+  "single_cell_marker_dotplot.png",
+  plot = p,
+  width = 18.5,
+  height = 10.4,
+  dpi = 320,
+  bg = "white"
+)
+
+p
+```
+
