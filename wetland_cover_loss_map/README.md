@@ -11,6 +11,7 @@ All wetland-loss values are synthetic and reproducible with `set.seed(1031)`.
 - `wetland_cover_loss_map.png` — high-resolution figure.
 - `synthetic_wetland_loss_grid.csv` — synthetic grid-cell values.
 - `wetland_region_parameters.csv` — parameters controlling spatial wetland occurrence.
+- `wetland_loss_pressure_parameters.csv` — parameters controlling regional loss intensity.
 
 ## Rebuild
 

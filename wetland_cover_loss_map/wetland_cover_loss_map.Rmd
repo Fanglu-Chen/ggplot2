@@ -30,8 +30,36 @@ world <- ne_countries(scale = "medium", returnclass = "sf") %>%
   st_make_valid()
 
 grid <- expand_grid(
-  longitude = seq(-179.5, 179.5, by = 1.0),
-  latitude = seq(-58.5, 82.5, by = 1.0)
+  longitude = seq(-179.75, 179.75, by = 0.5),
+  latitude = seq(-58.75, 82.75, by = 0.5)
+)
+
+# Create an organic, spatially autocorrelated texture on the complete grid.
+# Combining fine- and medium-scale smoothed fields avoids both isolated square
+# pixels and directional Fourier stripes.
+n_lon <- length(unique(grid$longitude))
+n_lat <- length(unique(grid$latitude))
+
+smooth_field <- function(z, kernel) {
+  kernel <- kernel / sum(kernel)
+  by_column <- apply(
+    z, 2,
+    function(v) as.numeric(stats::filter(v, kernel, sides = 2, circular = TRUE))
+  )
+  t(apply(
+    by_column, 1,
+    function(v) as.numeric(stats::filter(v, kernel, sides = 2, circular = TRUE))
+  ))
+}
+
+raw_noise <- matrix(rnorm(n_lon * n_lat), nrow = n_lat, ncol = n_lon)
+fine_field <- smooth_field(raw_noise, c(1, 2, 1))
+medium_field <- smooth_field(raw_noise, c(1, 2, 3, 2, 1))
+texture_raw <- 0.68 * fine_field + 0.32 * medium_field
+texture_limits <- quantile(texture_raw, c(0.02, 0.98))
+grid$spatial_texture <- pmin(
+  1, pmax(0, (as.vector(texture_raw) - texture_limits[1]) /
+              diff(texture_limits))
 )
 
 grid_sf <- st_as_sf(
@@ -52,18 +80,37 @@ spatial_kernel <- function(lon, lat, centre_lon, centre_lat,
 
 wetland_centres <- tribble(
   ~lon, ~lat, ~lon_sd, ~lat_sd, ~weight,
-   -92,   34,      24,      13,    0.95,
-   -61,   -5,      25,      13,    0.82,
-   -57,  -20,      13,       8,    0.72,
-    10,   50,      28,      12,    1.00,
-    45,   55,      38,      15,    0.78,
-    87,   55,      40,      15,    0.67,
-   114,   31,      23,      13,    1.00,
-    80,   23,      18,      12,    0.95,
-   105,   12,      18,      12,    0.93,
-    25,    0,      24,      14,    0.66,
-    47,  -20,      10,       9,    0.63,
-   145,  -27,      18,      13,    0.75
+  # North America: eastern interior, Great Lakes, and Pacific coast
+   -84,   37,      24,      12,    1.10,
+   -91,   46,      18,       9,    0.70,
+  -121,   39,       8,      17,    0.72,
+  -102,   24,      18,      10,    0.52,
+  # South America: Amazon margins, Andes, Pantanal, and Atlantic coast
+   -61,   -5,      23,       8,    0.30,
+   -74,  -12,       6,      23,    0.35,
+   -57,  -19,      12,       8,    0.72,
+   -49,  -27,      15,      13,    0.86,
+  # Europe and the broad Eurasian wetland belt
+     8,   50,      23,      11,    1.10,
+    18,   63,      16,       8,    0.55,
+    47,   55,      32,       9,    0.38,
+    87,   56,      38,      10,    0.30,
+   126,   49,      21,      10,    0.38,
+  # South, East, and Southeast Asia
+    79,   23,      16,      12,    1.12,
+   112,   32,      23,      14,    1.28,
+   125,   44,      15,       9,    0.82,
+   105,   12,      17,      12,    1.02,
+   136,   37,       9,      10,    0.55,
+  # African wetland belts and Madagascar
+     2,   13,      37,       5,    0.48,
+    30,   -2,      16,      15,    0.38,
+    25,  -24,      14,      10,    0.40,
+    47,  -20,       8,      10,    0.58,
+  # Australian and New Zealand coastal regions
+   149,  -28,       8,      15,    0.66,
+   116,  -32,       7,       6,    0.40,
+   173,  -41,       7,       8,    0.55
 )
 
 wetland_score <- rep(0, nrow(land_grid))
@@ -76,25 +123,36 @@ for (i in seq_len(nrow(wetland_centres))) {
     )
 }
 
-# Wetland occurrence is spatially clustered and sparse outside the main regions.
-occurrence_probability <- pmin(
-  0.94,
-  0.035 + 0.74 * (1 - exp(-1.35 * wetland_score)) +
-    0.08 * exp(-(land_grid$latitude / 28)^2)
-)
+# Convert the regional kernels into a habitat-suitability surface.
+habitat_suitability <- 1 - exp(-wetland_score)
 
-wetland_present <- runif(nrow(land_grid)) < occurrence_probability
+# Habitat suitability controls how much of the local textured field is kept.
+# Strong wetland regions remain dense but retain small holes; marginal regions
+# break into sparse, irregular patches.
+presence_threshold <- 0.84 - 0.48 * habitat_suitability
+wetland_present <- land_grid$spatial_texture > presence_threshold &
+  habitat_suitability > 0.11
 
 pressure_centres <- tribble(
   ~lon, ~lat, ~lon_sd, ~lat_sd, ~weight,
-   -88,   36,      20,      12,    0.72,
-    10,   50,      25,      12,    0.88,
-    79,   23,      18,      12,    0.84,
-   116,   32,      20,      12,    1.00,
-   106,   12,      16,      11,    0.88,
-   -58,  -22,      17,      11,    0.62,
-    30,   -2,      21,      14,    0.48,
-   146,  -31,      16,      11,    0.58
+   -84,   37,      22,      12,    1.10,
+  -121,   37,       9,      14,    0.58,
+   -49,  -26,      16,      13,    0.98,
+   -72,   -9,       8,      22,    0.62,
+     9,   50,      24,      12,    1.50,
+    43,   53,      30,       9,    0.32,
+   105,   55,      40,      10,    0.18,
+    79,   23,      16,      12,    1.35,
+   115,   32,      21,      13,    1.75,
+   126,   45,      14,       9,    1.05,
+   105,   12,      16,      11,    1.45,
+     1,   13,      37,       5,    0.28,
+    31,   -3,      16,      15,    0.30,
+    26,  -25,      14,      10,    0.30,
+    47,  -20,       8,       9,    0.52,
+   149,  -30,       8,      14,    0.48,
+   116,  -32,       7,       6,    0.38,
+   173,  -41,       7,       8,    0.68
 )
 
 human_pressure <- rep(0, nrow(land_grid))
@@ -111,11 +169,15 @@ wetland_loss <- land_grid %>%
   mutate(
     wetland_present = wetland_present,
     wetland_score = wetland_score,
-    human_pressure = human_pressure,
+    human_pressure = 1 - exp(-human_pressure),
+    spatial_texture = spatial_texture,
     percentage_lost = pmin(
       100,
-      pmax(1, 8 + 68 * (1 - exp(-1.15 * human_pressure)) +
-             17 * runif(n()) + rnorm(n(), sd = 4))
+      pmax(
+        1,
+        3 + 88 * human_pressure +
+          13 * (spatial_texture - 0.5)
+      )
     )
   ) %>%
   filter(wetland_present) %>%
@@ -123,6 +185,7 @@ wetland_loss <- land_grid %>%
 
 write.csv(wetland_loss, "synthetic_wetland_loss_grid.csv", row.names = FALSE)
 write.csv(wetland_centres, "wetland_region_parameters.csv", row.names = FALSE)
+write.csv(pressure_centres, "wetland_loss_pressure_parameters.csv", row.names = FALSE)
 ```
 
 ## Rectangular world map
@@ -131,7 +194,7 @@ write.csv(wetland_centres, "wetland_region_parameters.csv", row.names = FALSE)
 legend_dummy <- tibble(
   longitude = -179,
   latitude = -59,
-  status = "<1% wetland in 1700\nor unavailable"
+  status = "<1% loss or\n<1% wetland\nin 1700"
 )
 
 wetland_map <- ggplot() +
@@ -142,7 +205,7 @@ wetland_map <- ggplot() +
   geom_tile(
     data = wetland_loss,
     aes(longitude, latitude, fill = percentage_lost),
-    width = 1.02, height = 1.02, alpha = 0.96
+    width = 0.52, height = 0.52, alpha = 0.97
   ) +
   geom_sf(
     data = world,
@@ -167,7 +230,7 @@ wetland_map <- ggplot() +
     )
   ) +
   scale_colour_manual(
-    values = c("<1% wetland in 1700\nor unavailable" = "#D7D9D9"),
+    values = c("<1% loss or\n<1% wetland\nin 1700" = "#D7D9D9"),
     name = NULL,
     guide = guide_legend(
       order = 1,
@@ -206,3 +269,4 @@ wetland_map
 - `wetland_cover_loss_map.png`: high-resolution rectangular map.
 - `synthetic_wetland_loss_grid.csv`: synthetic gridded percentage-loss data.
 - `wetland_region_parameters.csv`: spatial-kernel parameters.
+- `wetland_loss_pressure_parameters.csv`: regional loss-intensity parameters.
