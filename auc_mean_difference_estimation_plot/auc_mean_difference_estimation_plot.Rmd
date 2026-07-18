@@ -1,0 +1,259 @@
+---
+title: "AUC and Mean-Difference Estimation Plot"
+author: "Synthetic example"
+output:
+  html_document:
+    self_contained: true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = FALSE, message = FALSE,
+  fig.align = "center", dpi = 160
+)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggbeeswarm)
+library(patchwork)
+set.seed(1031)
+```
+
+## Synthetic paired AUC data
+
+Three paired comparisons are simulated with 125 observations per group. The right panel displays bootstrap distributions of the paired mean differences.
+
+```{r data}
+n_subjects <- 125
+
+comparison_1 <- tibble(
+  subject = seq_len(n_subjects),
+  Solvent = rnorm(n_subjects, mean = 0.0, sd = 6.0)
+) %>%
+  mutate(Air = Solvent + rnorm(n_subjects, mean = 1.1, sd = 4.2))
+
+comparison_2 <- tibble(
+  subject = seq_len(n_subjects),
+  Solvent = rnorm(n_subjects, mean = 0.0, sd = 6.2)
+) %>%
+  mutate(IPM = Solvent + rnorm(n_subjects, mean = 19.5, sd = 11.0))
+
+comparison_3 <- tibble(
+  subject = seq_len(n_subjects),
+  Air = rnorm(n_subjects, mean = 1.2, sd = 6.0)
+) %>%
+  mutate(IPM = Air + rnorm(n_subjects, mean = 17.5, sd = 10.5))
+
+left_data <- bind_rows(
+  comparison_1 %>%
+    pivot_longer(c(Solvent, Air), names_to = "group", values_to = "AUC") %>%
+    mutate(comparison = "Air - Solvent", row_y = if_else(group == "Solvent", 6, 5)),
+  comparison_2 %>%
+    pivot_longer(c(Solvent, IPM), names_to = "group", values_to = "AUC") %>%
+    mutate(comparison = "IPM - Solvent", row_y = if_else(group == "Solvent", 4, 3)),
+  comparison_3 %>%
+    pivot_longer(c(Air, IPM), names_to = "group", values_to = "AUC") %>%
+    mutate(comparison = "IPM - Air", row_y = if_else(group == "Air", 2, 1))
+) %>%
+  mutate(
+    group = factor(group, levels = c("Solvent", "Air", "IPM")),
+    AUC = pmin(60, pmax(-12, AUC))
+  )
+
+paired_differences <- bind_rows(
+  comparison_1 %>% transmute(comparison = "Air - Solvent", difference = Air - Solvent),
+  comparison_2 %>% transmute(comparison = "IPM - Solvent", difference = IPM - Solvent),
+  comparison_3 %>% transmute(comparison = "IPM - Air", difference = IPM - Air)
+)
+
+bootstrap_mean <- function(x, n_boot = 4000) {
+  replicate(n_boot, mean(sample(x, length(x), replace = TRUE)))
+}
+
+bootstrap_data <- paired_differences %>%
+  group_by(comparison) %>%
+  summarise(
+    bootstrap_mean = list(bootstrap_mean(difference)),
+    .groups = "drop"
+  ) %>%
+  unnest_longer(bootstrap_mean) %>%
+  mutate(
+    y = recode(
+      comparison,
+      `Air - Solvent` = 5,
+      `IPM - Solvent` = 3,
+      `IPM - Air` = 1
+    ),
+    density_group = if_else(comparison == "Air - Solvent", "Air", "IPM")
+  )
+
+difference_summary <- paired_differences %>%
+  group_by(comparison) %>%
+  summarise(
+    mean_difference = mean(difference),
+    ci_low = quantile(bootstrap_mean(difference), 0.025),
+    ci_high = quantile(bootstrap_mean(difference), 0.975),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    y = recode(
+      comparison,
+      `Air - Solvent` = 5,
+      `IPM - Solvent` = 3,
+      `IPM - Air` = 1
+    ),
+    density_group = if_else(comparison == "Air - Solvent", "Air", "IPM")
+  )
+
+write.csv(left_data, "synthetic_auc_observations.csv", row.names = FALSE)
+write.csv(bootstrap_data, "bootstrap_mean_differences.csv", row.names = FALSE)
+write.csv(difference_summary, "mean_difference_summary.csv", row.names = FALSE)
+```
+
+## Estimation plot
+
+```{r plot, fig.width=7.6, fig.height=6.4, out.width="82%"}
+group_colours <- c(
+  "Solvent" = "#FC8D62",
+  "Air" = "#8DA0CB",
+  "IPM" = "#66C2A5"
+)
+
+left_panel <- ggplot(left_data, aes(AUC, row_y)) +
+  ggbeeswarm::geom_quasirandom(
+    aes(colour = group, group = interaction(comparison, group)),
+    groupOnX = FALSE,
+    width = 0.22,
+    shape = 21,
+    fill = "white",
+    size = 1.65,
+    stroke = 0.55,
+    alpha = 0.98,
+    show.legend = FALSE
+  ) +
+  scale_colour_manual(values = group_colours) +
+  annotate(
+    "text",
+    x = -15.5, y = c(6, 5, 4, 3, 2, 1),
+    label = c("Solvent", "Air", "Solvent", "IPM", "Air", "IPM"),
+    colour = unname(group_colours[c("Solvent", "Air", "Solvent", "IPM", "Air", "IPM")]),
+    hjust = 1, size = 3.5
+  ) +
+  annotate(
+    "segment",
+    x = -12.5, xend = -12.5,
+    y = c(5, 3, 1), yend = c(6, 4, 2),
+    linewidth = 0.45, colour = "#555555"
+  ) +
+  annotate(
+    "segment",
+    x = -12.5, xend = -10.0,
+    y = c(6, 5, 4, 3, 2, 1), yend = c(6, 5, 4, 3, 2, 1),
+    linewidth = 0.45, colour = "#555555"
+  ) +
+  annotate(
+    "text", x = 52, y = c(5.5, 3.5, 1.5),
+    label = "italic(n) == 125", parse = TRUE,
+    hjust = 0.5, size = 3.3
+  ) +
+  annotate(
+    "text", x = -18.5, y = 6.62,
+    label = "f", fontface = "bold", size = 5.6
+  ) +
+  scale_x_continuous(
+    limits = c(-19, 62), breaks = c(0, 50),
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(limits = c(0.45, 6.75), expand = c(0, 0)) +
+  labs(x = "AUC", y = NULL) +
+  coord_cartesian(clip = "off") +
+  theme_classic(base_size = 12) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.title.x = element_text(size = 13, margin = margin(t = 8)),
+    axis.text.x = element_text(size = 11, colour = "black"),
+    axis.line.x = element_line(linewidth = 0.6),
+    axis.ticks.x = element_line(linewidth = 0.55),
+    axis.ticks.length = grid::unit(2.0, "mm"),
+    plot.margin = margin(10, 2, 8, 15)
+  )
+
+right_panel <- ggplot(
+  bootstrap_data,
+  aes(x = bootstrap_mean, y = y, group = comparison, fill = density_group)
+) +
+  geom_vline(xintercept = 0, colour = "#595959", linewidth = 0.55) +
+  geom_violin(
+    orientation = "y", width = 0.48,
+    scale = "width", trim = TRUE,
+    colour = NA, alpha = 0.74
+  ) +
+  geom_errorbarh(
+    data = difference_summary,
+    aes(
+      y = y,
+      xmin = ci_low,
+      xmax = ci_high
+    ),
+    inherit.aes = FALSE,
+    height = 0,
+    linewidth = 0.75,
+    colour = "black"
+  ) +
+  geom_point(
+    data = difference_summary,
+    aes(x = mean_difference, y = y),
+    inherit.aes = FALSE,
+    size = 2.3, colour = "black"
+  ) +
+  geom_point(
+    data = tibble(x = 0, y = c(6, 4, 2)),
+    aes(x, y), inherit.aes = FALSE,
+    size = 2.2, colour = "black"
+  ) +
+  annotate(
+    "text", x = 27.0, y = c(3, 1),
+    label = "#", size = 4.0, hjust = 0.5
+  ) +
+  scale_fill_manual(values = group_colours[c("Air", "IPM")], guide = "none") +
+  scale_x_continuous(
+    limits = c(-2.5, 29), breaks = c(0, 20),
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(limits = c(0.45, 6.75), expand = c(0, 0)) +
+  labs(x = "Mean difference", y = NULL) +
+  coord_cartesian(clip = "off") +
+  theme_classic(base_size = 12) +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank(),
+    axis.title.x = element_text(size = 13, margin = margin(t = 8)),
+    axis.text.x = element_text(size = 11, colour = "black"),
+    axis.line.x = element_line(linewidth = 0.6),
+    axis.ticks.x = element_line(linewidth = 0.55),
+    axis.ticks.length = grid::unit(2.0, "mm"),
+    plot.margin = margin(10, 10, 8, 2)
+  )
+
+final_plot <- left_panel + right_panel +
+  plot_layout(widths = c(1.72, 1.0))
+
+ggsave(
+  "auc_mean_difference_estimation_plot.png",
+  final_plot,
+  width = 7.6, height = 6.4, dpi = 320, bg = "white"
+)
+
+final_plot
+```
+
+## Files
+
+- `auc_mean_difference_estimation_plot.png`: high-resolution combined figure.
+- `synthetic_auc_observations.csv`: paired AUC observations.
+- `bootstrap_mean_differences.csv`: bootstrap sampling distributions.
+- `mean_difference_summary.csv`: mean differences and confidence intervals.
