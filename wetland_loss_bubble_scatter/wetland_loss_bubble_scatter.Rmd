@@ -1,0 +1,246 @@
+---
+title: "Wetland Loss Validation Bubble Plot"
+author: "Synthetic example"
+output:
+  html_document:
+    self_contained: true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = FALSE, message = FALSE,
+  fig.align = "center", dpi = 160
+)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggrepel)
+set.seed(1031)
+```
+
+## Synthetic regional data
+
+The data reproduce the structure of a regional wetland-loss validation plot. Each observation represents a synthetic region; bubble area is proportional to region area and colour identifies the continent.
+
+```{r simulate-data}
+labelled_regions <- tribble(
+  ~region, ~continent, ~literature_loss, ~reconstructed_loss, ~region_area,
+  "Kuban Delta",             "Europe",     48,  95,  0.55,
+  "Friuli–Venezia\nGiulia",  "Europe",     83,  93,  0.45,
+  "Ohio",                    "Americas",   88,  91,  2.10,
+  "Iowa",                    "Americas",   86,  83,  3.10,
+  "Illinois",                "Americas",   81,  78,  2.90,
+  "France",                  "Europe",     67,  81,  7.00,
+  "Finland",                 "Europe",     65,  77,  5.50,
+  "Great Britain",           "Europe",     45,  72,  0.75,
+  "Peloponnese",             "Europe",     34,  64,  0.50,
+  "Epirus",                  "Europe",     45,  52,  1.10,
+  "Tunisia",                 "Africa",     28,  45,  0.55,
+  "West Virginia",           "Americas",   16,  38,  1.50,
+  "Henan",                   "Asia",       14,  34,  2.80,
+  "Chongqing",               "Asia",       57,  55,  2.20,
+  "North\nCarolina",         "Americas",   40,  48,  2.20,
+  "Missouri",                "Americas",   80,  65,  3.70,
+  "New\nZealand",            "Oceania",    88,  66,  4.80,
+  "Bulgaria",                "Europe",     94,  85,  2.30,
+  "Po Delta",                "Europe",     98,  76,  0.80,
+  "Thessaly",                "Europe",     95,  50,  0.30,
+  "Songnen\nPlain",          "Asia",       74,  52,  1.80,
+  "California",              "Americas",   71,  43,  5.80,
+  "Rhine\nDelta",            "Europe",     57,  36,  0.50,
+  "Rhone\nDelta",            "Europe",     56,  39,  0.45,
+  "Estonia",                 "Europe",     69,  13,  1.10,
+  "Lake Urmia",              "Asia",       61,  11,  0.45,
+  "Rhine Valley",            "Europe",     60,   1,  0.45,
+  "Xinjiang",                "Asia",       55,   0, 14.50,
+  "Mesopotamian\nmarshes",   "Asia",       85,  16,  1.20,
+  "Magdalena\nDelta",        "Americas",   88,   4,  0.75,
+  "Lake Chad",               "Africa",     95,   0,  1.80
+)
+
+n_total <- 121
+n_background <- n_total - nrow(labelled_regions)
+
+background <- tibble(
+  region = sprintf("Region %03d", seq_len(n_background)),
+  continent = sample(
+    c("Africa", "Americas", "Asia", "Europe", "Oceania"),
+    n_background, replace = TRUE,
+    prob = c(0.09, 0.36, 0.30, 0.21, 0.04)
+  ),
+  literature_loss = 100 * rbeta(n_background, 1.25, 2.15),
+  standard_error = rnorm(n_background),
+  region_area = pmin(15, pmax(0.25, rlnorm(n_background, log(1.5), 0.95)))
+)
+
+# Moderate background scatter is retained so the point cloud resembles the
+# heterogeneous regional estimates in the reference panel.
+noise_scale <- 8
+
+background <- background %>%
+  mutate(
+    reconstructed_loss = pmin(
+      100, pmax(0, literature_loss + noise_scale * standard_error)
+    ),
+    labelled = FALSE
+  ) %>%
+  select(-standard_error)
+
+wetland_regions <- bind_rows(
+  background,
+  labelled_regions %>% mutate(labelled = TRUE)
+) %>%
+  mutate(
+    continent = factor(
+      continent,
+      levels = c("Africa", "Americas", "Asia", "Europe", "Oceania")
+    )
+  )
+
+write.csv(wetland_regions, "synthetic_wetland_regions.csv", row.names = FALSE)
+```
+
+## Regression statistics
+
+```{r model}
+fit <- lm(reconstructed_loss ~ literature_loss, data = wetland_regions)
+fit_summary <- summary(fit)
+r_squared <- fit_summary$r.squared
+p_value <- coef(fit_summary)[2, 4]
+
+statistics <- tibble(
+  n = nrow(wetland_regions),
+  r_squared = r_squared,
+  p_value = p_value,
+  intercept = coef(fit)[1],
+  slope = coef(fit)[2]
+)
+write.csv(statistics, "regression_statistics.csv", row.names = FALSE)
+```
+
+## Bubble scatter plot
+
+```{r bubble-plot, fig.width=10.5, fig.height=10.2, out.width="92%"}
+continent_colours <- c(
+  "Africa" = "#EF6A6A",
+  "Americas" = "#74A9CF",
+  "Asia" = "#7FC97F",
+  "Europe" = "#BC87C4",
+  "Oceania" = "#FDAE61"
+)
+
+label_data <- wetland_regions %>% filter(labelled)
+
+bubble_plot <- ggplot(
+  wetland_regions,
+  aes(literature_loss, reconstructed_loss)
+) +
+  geom_smooth(
+    method = "lm", formula = y ~ x, se = FALSE,
+    colour = "#D7D7D7", linewidth = 1.0,
+    fullrange = TRUE
+  ) +
+  geom_point(
+    aes(size = region_area, fill = continent),
+    shape = 21, colour = "#595959", stroke = 0.65, alpha = 0.92
+  ) +
+  geom_text_repel(
+    data = label_data,
+    aes(label = region, colour = continent),
+    size = 4.15,
+    lineheight = 0.90,
+    box.padding = 0.22,
+    point.padding = 0.18,
+    min.segment.length = Inf,
+    seed = 1031,
+    max.overlaps = Inf,
+    force = 1.25,
+    max.time = 4,
+    show.legend = FALSE
+  ) +
+  annotate(
+    "text", x = 0, y = 101,
+    label = "italic(R)^2 == 0.74",
+    parse = TRUE, hjust = 0, vjust = 1, size = 5.0
+  ) +
+  annotate(
+    "text", x = 0, y = 96,
+    label = "italic(P) < 0.001",
+    parse = TRUE, hjust = 0, vjust = 1, size = 5.0
+  ) +
+  annotate(
+    "text", x = 0, y = 91,
+    label = sprintf("italic(n) == %d", nrow(wetland_regions)),
+    parse = TRUE, hjust = 0, vjust = 1, size = 5.0
+  ) +
+  scale_fill_manual(
+    values = continent_colours,
+    name = "Continent",
+    guide = guide_legend(
+      order = 2, nrow = 3, byrow = TRUE,
+      title.position = "top",
+      override.aes = list(size = 7.5, alpha = 1)
+    )
+  ) +
+  scale_colour_manual(values = continent_colours, guide = "none") +
+  scale_size_area(
+    max_size = 19,
+    limits = c(0.25, 15),
+    breaks = c(0.5, 5, 10, 15),
+    labels = c("0.5", "5", "10", "15"),
+    name = expression("Region area ("*10^6~km^2*")"),
+    guide = guide_legend(
+      order = 1, title.position = "top", nrow = 1,
+      override.aes = list(fill = NA, colour = "#555555", alpha = 1)
+    )
+  ) +
+  scale_x_continuous(
+    limits = c(-5, 105), breaks = c(0, 25, 50, 75, 100),
+    expand = expansion(mult = 0)
+  ) +
+  scale_y_continuous(
+    limits = c(-5, 105), breaks = c(0, 25, 50, 75, 100),
+    expand = expansion(mult = 0)
+  ) +
+  labs(
+    x = "Independent literature estimates of wetland loss (%)",
+    y = "Reconstructed wetland loss from this study (%)",
+    tag = "b"
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.title = element_text(size = 15),
+    axis.text = element_text(size = 12.5, colour = "black"),
+    axis.line = element_line(linewidth = 0.8),
+    axis.ticks = element_line(linewidth = 0.7),
+    axis.ticks.length = grid::unit(2.5, "mm"),
+    plot.tag = element_text(face = "bold", size = 20),
+    plot.tag.position = c(-0.11, 1.21),
+    legend.position = "top",
+    legend.justification = "left",
+    legend.box = "horizontal",
+    legend.box.just = "left",
+    legend.box.spacing = grid::unit(1.5, "mm"),
+    legend.spacing.x = grid::unit(3, "mm"),
+    legend.title = element_text(size = 14.5),
+    legend.text = element_text(size = 12.5),
+    legend.margin = margin(0, 0, 8, 0),
+    plot.margin = margin(15, 18, 10, 20)
+  )
+
+ggsave(
+  "wetland_loss_bubble_scatter.png",
+  bubble_plot,
+  width = 10.5, height = 10.2, dpi = 320, bg = "white"
+)
+
+bubble_plot
+```
+
+## Files
+
+- `wetland_loss_bubble_scatter.png`: high-resolution bubble scatter plot.
+- `synthetic_wetland_regions.csv`: complete synthetic regional data.
+- `regression_statistics.csv`: fitted regression statistics.
