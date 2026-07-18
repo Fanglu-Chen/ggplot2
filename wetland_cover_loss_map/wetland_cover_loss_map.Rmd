@@ -1,0 +1,208 @@
+---
+title: "Global Wetland Cover Loss"
+author: "Synthetic example"
+output:
+  html_document:
+    self_contained: true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = FALSE, message = FALSE,
+  fig.align = "center", dpi = 160
+)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(sf)
+library(rnaturalearth)
+set.seed(1031)
+```
+
+## Synthetic spatial data
+
+This reproduction uses a regular longitude–latitude grid and synthetic wetland-loss values. It is intended to reproduce the visual structure of the reference figure, not to provide historical estimates.
+
+```{r simulate-data}
+world <- ne_countries(scale = "medium", returnclass = "sf") %>%
+  filter(continent != "Antarctica") %>%
+  st_make_valid()
+
+grid <- expand_grid(
+  longitude = seq(-179.5, 179.5, by = 1.0),
+  latitude = seq(-58.5, 82.5, by = 1.0)
+)
+
+grid_sf <- st_as_sf(
+  grid, coords = c("longitude", "latitude"),
+  crs = 4326, remove = FALSE
+)
+
+on_land <- lengths(st_intersects(grid_sf, world)) > 0
+land_grid <- grid[on_land, ]
+
+spatial_kernel <- function(lon, lat, centre_lon, centre_lat,
+                           lon_sd, lat_sd) {
+  # Wrap longitudinal distance around the date line.
+  dlon <- abs(lon - centre_lon)
+  dlon <- pmin(dlon, 360 - dlon)
+  exp(-0.5 * ((dlon / lon_sd)^2 + ((lat - centre_lat) / lat_sd)^2))
+}
+
+wetland_centres <- tribble(
+  ~lon, ~lat, ~lon_sd, ~lat_sd, ~weight,
+   -92,   34,      24,      13,    0.95,
+   -61,   -5,      25,      13,    0.82,
+   -57,  -20,      13,       8,    0.72,
+    10,   50,      28,      12,    1.00,
+    45,   55,      38,      15,    0.78,
+    87,   55,      40,      15,    0.67,
+   114,   31,      23,      13,    1.00,
+    80,   23,      18,      12,    0.95,
+   105,   12,      18,      12,    0.93,
+    25,    0,      24,      14,    0.66,
+    47,  -20,      10,       9,    0.63,
+   145,  -27,      18,      13,    0.75
+)
+
+wetland_score <- rep(0, nrow(land_grid))
+for (i in seq_len(nrow(wetland_centres))) {
+  wetland_score <- wetland_score + wetland_centres$weight[i] *
+    spatial_kernel(
+      land_grid$longitude, land_grid$latitude,
+      wetland_centres$lon[i], wetland_centres$lat[i],
+      wetland_centres$lon_sd[i], wetland_centres$lat_sd[i]
+    )
+}
+
+# Wetland occurrence is spatially clustered and sparse outside the main regions.
+occurrence_probability <- pmin(
+  0.94,
+  0.035 + 0.74 * (1 - exp(-1.35 * wetland_score)) +
+    0.08 * exp(-(land_grid$latitude / 28)^2)
+)
+
+wetland_present <- runif(nrow(land_grid)) < occurrence_probability
+
+pressure_centres <- tribble(
+  ~lon, ~lat, ~lon_sd, ~lat_sd, ~weight,
+   -88,   36,      20,      12,    0.72,
+    10,   50,      25,      12,    0.88,
+    79,   23,      18,      12,    0.84,
+   116,   32,      20,      12,    1.00,
+   106,   12,      16,      11,    0.88,
+   -58,  -22,      17,      11,    0.62,
+    30,   -2,      21,      14,    0.48,
+   146,  -31,      16,      11,    0.58
+)
+
+human_pressure <- rep(0, nrow(land_grid))
+for (i in seq_len(nrow(pressure_centres))) {
+  human_pressure <- human_pressure + pressure_centres$weight[i] *
+    spatial_kernel(
+      land_grid$longitude, land_grid$latitude,
+      pressure_centres$lon[i], pressure_centres$lat[i],
+      pressure_centres$lon_sd[i], pressure_centres$lat_sd[i]
+    )
+}
+
+wetland_loss <- land_grid %>%
+  mutate(
+    wetland_present = wetland_present,
+    wetland_score = wetland_score,
+    human_pressure = human_pressure,
+    percentage_lost = pmin(
+      100,
+      pmax(1, 8 + 68 * (1 - exp(-1.15 * human_pressure)) +
+             17 * runif(n()) + rnorm(n(), sd = 4))
+    )
+  ) %>%
+  filter(wetland_present) %>%
+  select(longitude, latitude, percentage_lost)
+
+write.csv(wetland_loss, "synthetic_wetland_loss_grid.csv", row.names = FALSE)
+write.csv(wetland_centres, "wetland_region_parameters.csv", row.names = FALSE)
+```
+
+## Rectangular world map
+
+```{r map, fig.width=13, fig.height=5.5, out.width="100%"}
+legend_dummy <- tibble(
+  longitude = -179,
+  latitude = -59,
+  status = "<1% wetland in 1700\nor unavailable"
+)
+
+wetland_map <- ggplot() +
+  geom_sf(
+    data = world,
+    fill = "#E5E6E6", colour = "#C6C9C9", linewidth = 0.18
+  ) +
+  geom_tile(
+    data = wetland_loss,
+    aes(longitude, latitude, fill = percentage_lost),
+    width = 1.02, height = 1.02, alpha = 0.96
+  ) +
+  geom_sf(
+    data = world,
+    fill = NA, colour = "#D0D2D2", linewidth = 0.14
+  ) +
+  geom_point(
+    data = legend_dummy,
+    aes(longitude, latitude, colour = status),
+    shape = 15, size = 4.5, alpha = 0
+  ) +
+  scale_fill_gradientn(
+    colours = c("#FFE45B", "#FFC22E", "#FF8A18", "#F04A0B", "#CC1707", "#8D0000"),
+    limits = c(1, 100),
+    breaks = c(1, 25, 50, 75, 100),
+    name = "Percentage of wetland\ncover lost (% of wetland\narea in 1700)",
+    guide = guide_colourbar(
+      order = 2,
+      title.position = "top", title.hjust = 0.5,
+      barheight = grid::unit(49, "mm"),
+      barwidth = grid::unit(5.5, "mm"),
+      ticks.colour = "#333333", frame.colour = "#666666"
+    )
+  ) +
+  scale_colour_manual(
+    values = c("<1% wetland in 1700\nor unavailable" = "#D7D9D9"),
+    name = NULL,
+    guide = guide_legend(
+      order = 1,
+      override.aes = list(alpha = 1, size = 5.5, shape = 15)
+    )
+  ) +
+  coord_sf(
+    xlim = c(-180, 180), ylim = c(-60, 84),
+    expand = FALSE, datum = NA
+  ) +
+  theme_void(base_size = 11) +
+  theme(
+    panel.background = element_rect(fill = "white", colour = "#505050", linewidth = 0.65),
+    plot.background = element_rect(fill = "white", colour = NA),
+    plot.margin = margin(10, 10, 10, 10),
+    legend.position = "right",
+    legend.box = "vertical",
+    legend.box.just = "left",
+    legend.spacing.y = grid::unit(3, "mm"),
+    legend.title = element_text(size = 10.5, face = "bold", lineheight = 0.95),
+    legend.text = element_text(size = 9, lineheight = 0.95),
+    legend.key = element_rect(fill = "white", colour = NA)
+  )
+
+ggsave(
+  "wetland_cover_loss_map.png",
+  wetland_map,
+  width = 13, height = 5.5, dpi = 320, bg = "white"
+)
+
+wetland_map
+```
+
+## Files
+
+- `wetland_cover_loss_map.png`: high-resolution rectangular map.
+- `synthetic_wetland_loss_grid.csv`: synthetic gridded percentage-loss data.
+- `wetland_region_parameters.csv`: spatial-kernel parameters.
