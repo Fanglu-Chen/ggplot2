@@ -1,0 +1,146 @@
+---
+title: "Three-dimensional Gibbs Energy Landscape"
+author: "Synthetic example"
+output:
+  html_document:
+    self_contained: true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", dpi = 160)
+library(dplyr)
+library(tidyr)
+library(plot3D)
+set.seed(1031)
+```
+
+## Model
+
+The surface uses a synthetic Gaussian-mixture probability distribution. Relative Gibbs energy is calculated as
+
+\[
+\Delta G(x,y)=\min\left[-1.45\log\{P(x,y)/P_{\max}\}, 11\right].
+\]
+
+```{r simulate-landscape}
+x_values <- seq(0.020, 0.190, length.out = 170)
+y_values <- seq(1.458, 1.535, length.out = 170)
+landscape <- expand_grid(PC1 = x_values, PC2 = y_values)
+
+gaussian2d <- function(x, y, mux, muy, sdx, sdy, rho = 0) {
+  zx <- (x - mux) / sdx
+  zy <- (y - muy) / sdy
+  exp(-(zx^2 - 2 * rho * zx * zy + zy^2) / (2 * (1 - rho^2))) /
+    (2 * pi * sdx * sdy * sqrt(1 - rho^2))
+}
+
+states <- tribble(
+  ~weight, ~mux,  ~muy,  ~sdx,  ~sdy,  ~rho,
+     0.28, 0.057, 1.471, 0.009, 0.0055,  0.25,
+     0.07, 0.076, 1.481, 0.010, 0.0060,  0.45,
+     0.02, 0.097, 1.489, 0.011, 0.0065,  0.30,
+     0.21, 0.128, 1.478, 0.009, 0.0065,  0.15,
+     0.27, 0.144, 1.494, 0.011, 0.0100,  0.55,
+     0.15, 0.159, 1.512, 0.010, 0.0085,  0.48
+)
+
+density <- rep(0, nrow(landscape))
+for (i in seq_len(nrow(states))) {
+  density <- density + states$weight[i] * gaussian2d(
+    landscape$PC1, landscape$PC2,
+    states$mux[i], states$muy[i],
+    states$sdx[i], states$sdy[i], states$rho[i]
+  )
+}
+
+modulation <- 1 + 0.045 * sin(165 * landscape$PC1) *
+  cos(310 * landscape$PC2)
+density <- pmax(density * modulation, .Machine$double.xmin)
+
+landscape <- landscape %>%
+  mutate(
+    probability = density / max(density),
+    gibbs_energy = pmin(1.45 * -log(probability), 11)
+  )
+
+z_matrix <- xtabs(gibbs_energy ~ PC1 + PC2, data = landscape)
+
+write.csv(landscape, "gibbs_energy_grid_3d.csv", row.names = FALSE)
+write.csv(states, "synthetic_state_parameters.csv", row.names = FALSE)
+```
+
+## Three-dimensional surface
+
+The coloured projection on the lower plane preserves the two-dimensional landscape while the surface displays the energy barriers in three dimensions.
+
+```{r surface, fig.width=9.0, fig.height=7.5, out.width="95%"}
+energy_colours <- colorRampPalette(c(
+  "#071B8C", "#003BCE", "#0078F0", "#00C8F0",
+  "#35E7B0", "#A9F06B", "#FFF33B", "#FF9B24",
+  "#EE321A", "#9E0000"
+))(180)
+
+draw_landscape_3d <- function() {
+  par(
+    mar = c(3.5, 3.2, 3.2, 5.6),
+    mgp = c(1.8, 0.55, 0),
+    tcl = -0.25,
+    cex.axis = 0.72,
+    cex.lab = 0.88,
+    family = "sans"
+  )
+
+  persp3D(
+    x = x_values,
+    y = y_values,
+    z = z_matrix,
+    colvar = z_matrix,
+    col = energy_colours,
+    clim = c(0, 11),
+    zlim = c(0, 11.3),
+    phi = 24,
+    theta = 38,
+    expand = 0.72,
+    border = NA,
+    facets = TRUE,
+    shade = 0.08,
+    lighting = FALSE,
+    image = TRUE,
+    contour = list(
+      side = "zmin", levels = seq(0, 10, by = 2),
+      col = "#F5F5F5", lwd = 0.7
+    ),
+    bty = "b2",
+    ticktype = "detailed",
+    xlab = "PC1",
+    ylab = "PC2",
+    zlab = "Gibbs free energy (kcal/mol)",
+    main = "Three-dimensional Gibbs Energy Landscape",
+    clab = "Gibbs free energy (kcal/mol)",
+    colkey = list(
+      side = 4, length = 0.58, width = 0.65,
+      shift = 0.05, cex.axis = 0.72, cex.clab = 0.78
+    )
+  )
+
+  mtext("H", side = 3, line = 1.05, adj = 0.01, cex = 2.0, font = 2)
+}
+
+png(
+  "gibbs_energy_landscape_3d.png",
+  width = 2880, height = 2400, res = 320,
+  bg = "white", type = "cairo"
+)
+draw_landscape_3d()
+dev.off()
+
+draw_landscape_3d()
+```
+
+## Files
+
+- `gibbs_energy_landscape_3d.png`: high-resolution 3D surface.
+- `gibbs_energy_grid_3d.csv`: complete energy grid.
+- `synthetic_state_parameters.csv`: Gaussian-state parameters.
