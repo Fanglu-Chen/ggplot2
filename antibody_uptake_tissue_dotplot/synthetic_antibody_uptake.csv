@@ -1,0 +1,85 @@
+"tissue","condition","replicate","uptake","tissue_index","group_offset","x_summary","x_point"
+"MIA PaCa-2","Control IgG click",1,10.2,1,-0.18,0.82,0.847504051891156
+"MIA PaCa-2","Control IgG click",2,11.2,1,-0.18,0.82,0.789651965366211
+"MIA PaCa-2","Control IgG click",3,12,1,-0.18,0.82,0.82682821478229
+"MIA PaCa-2","Control IgG click",4,13.3,1,-0.18,0.82,0.845036774822511
+"MIA PaCa-2","Pre-click",1,8.1,1,0,1,0.995265632742085
+"MIA PaCa-2","Pre-click",2,8.8,1,0,1,0.994968197471462
+"MIA PaCa-2","Pre-click",3,9.1,1,0,1,0.983081915278453
+"MIA PaCa-2","Pre-click",4,10.9,1,0,1,1.00272201662185
+"MIA PaCa-2","Site-specific click",1,15,1,0.18,1.18,1.19477778466884
+"MIA PaCa-2","Site-specific click",2,15.7,1,0.18,1.18,1.21412278635893
+"MIA PaCa-2","Site-specific click",3,17.1,1,0.18,1.18,1.21859277064214
+"MIA PaCa-2","Site-specific click",4,20.3,1,0.18,1.18,1.20069057729328
+"Spleen","Control IgG click",1,4.5,2,-0.18,1.82,1.82529528792715
+"Spleen","Control IgG click",2,7.4,2,-0.18,1.82,1.81520516166929
+"Spleen","Control IgG click",3,7.8,2,-0.18,1.82,1.77783058892237
+"Spleen","Control IgG click",4,9.2,2,-0.18,1.82,1.80116217731731
+"Spleen","Pre-click",1,3.4,2,0,2,1.97332916600863
+"Spleen","Pre-click",2,5.2,2,0,2,2.02811297291191
+"Spleen","Pre-click",3,6.4,2,0,2,2.02348609059118
+"Spleen","Pre-click",4,7.8,2,0,2,1.99582649637247
+"Spleen","Site-specific click",1,5.7,2,0.18,2.18,2.21509083234705
+"Spleen","Site-specific click",2,6,2,0.18,2.18,2.21197846502531
+"Spleen","Site-specific click",3,8.4,2,0.18,2.18,2.21859752691118
+"Spleen","Site-specific click",4,9.2,2,0.18,2.18,2.21482692341087
+"Liver","Control IgG click",1,5.2,3,-0.18,2.82,2.83987869917415
+"Liver","Control IgG click",2,5.5,3,-0.18,2.82,2.80270267776679
+"Liver","Control IgG click",3,6.7,3,-0.18,2.82,2.81092599078314
+"Liver","Control IgG click",4,7,3,-0.18,2.82,2.84857436315389
+"Liver","Pre-click",1,7.5,3,0,3,3.00510138896294
+"Liver","Pre-click",2,10.5,3,0,3,2.98195643043146
+"Liver","Pre-click",3,14,3,0,3,3.00484336709837
+"Liver","Pre-click",4,14.4,3,0,3,2.98027256473666
+"Liver","Site-specific click",1,3.8,3,0.18,3.18,3.15226878960617
+"Liver","Site-specific click",2,4.1,3,0.18,3.18,3.22402173150564
+"Liver","Site-specific click",3,4.4,3,0.18,3.18,3.2213346700184
+"Liver","Site-specific click",4,4.9,3,0.18,3.18,3.19595727384556
+"Blood","Control IgG click",1,5,4,-0.18,3.82,3.81282280631363
+"Blood","Control IgG click",2,5.6,4,-0.18,3.82,3.84885554886889
+"Blood","Control IgG click",3,6,4,-0.18,3.82,3.83485099675832
+"Blood","Control IgG click",4,6.9,4,-0.18,3.82,3.81732957317494
+"Blood","Pre-click",1,3.7,4,0,4,4.03217486441601
+"Blood","Pre-click",2,4.1,4,0,4,4.03509364541853
+"Blood","Pre-click",3,4.5,4,0,4,4.02845745748142
+"Blood","Pre-click",4,5.5,4,0,4,4.01000120266806
+"Blood","Site-specific click",1,4.5,4,0.18,4.18,4.15028993533924
+"Blood","Site-specific click",2,5.1,4,0.18,4.18,4.13968867301941
+"Blood","Site-specific click",3,5.5,4,0.18,4.18,4.20057457393268
+"Blood","Site-specific click",4,5.8,4,0.18,4.18,4.16012935323641
+"Kidney","Control IgG click",1,3.9,5,-0.18,4.82,4.80355567192892
+"Kidney","Control IgG click",2,4.1,5,-0.18,4.82,4.78382554886164
+"Kidney","Control IgG click",3,4.4,5,-0.18,4.82,4.77760334745981
+"Kidney","Control IgG click",4,4.8,5,-0.18,4.82,4.80679519955302
+"Kidney","Pre-click",1,3.3,5,0,5,4.96954096158035
+"Kidney","Pre-click",2,3.6,5,0,5,4.97198136853054
+"Kidney","Pre-click",3,3.9,5,0,5,4.98271822137758
+"Kidney","Pre-click",4,4.5,5,0,5,5.00909324631328
+"Kidney","Site-specific click",1,3.5,5,0.18,5.18,5.15504644381348
+"Kidney","Site-specific click",2,3.8,5,0.18,5.18,5.14347699383041
+"Kidney","Site-specific click",3,4.1,5,0.18,5.18,5.14803686367348
+"Kidney","Site-specific click",4,4.2,5,0.18,5.18,5.17029213114874
+"Lungs","Control IgG click",1,2.7,6,-0.18,5.82,5.82336713419994
+"Lungs","Control IgG click",2,3.4,6,-0.18,5.82,5.81891833297675
+"Lungs","Control IgG click",3,3.7,6,-0.18,5.82,5.77901418757858
+"Lungs","Control IgG click",4,4,6,-0.18,5.82,5.84366337436019
+"Lungs","Pre-click",1,1.7,6,0,6,5.95813367296709
+"Lungs","Pre-click",2,2.1,6,0,6,6.0220500721992
+"Lungs","Pre-click",3,2.6,6,0,6,6.01294820302399
+"Lungs","Pre-click",4,3,6,0,6,5.98834956314648
+"Lungs","Site-specific click",1,1.9,6,0.18,6.18,6.16266279136995
+"Lungs","Site-specific click",2,2.7,6,0.18,6.18,6.1752512247744
+"Lungs","Site-specific click",3,3,6,0.18,6.18,6.18906980795553
+"Lungs","Site-specific click",4,3.1,6,0.18,6.18,6.15592209413415
+"Heart","Control IgG click",1,1.7,7,-0.18,6.82,6.82211035656277
+"Heart","Control IgG click",2,1.9,7,-0.18,6.82,6.79499148597941
+"Heart","Control IgG click",3,2.1,7,-0.18,6.82,6.79039712919388
+"Heart","Control IgG click",4,3.6,7,-0.18,6.82,6.80881267888704
+"Heart","Pre-click",1,0.8,7,0,7,6.96915702523664
+"Heart","Pre-click",2,1.4,7,0,7,7.02257622037549
+"Heart","Pre-click",3,1.8,7,0,7,6.97086660772096
+"Heart","Pre-click",4,2.2,7,0,7,7.02481124743819
+"Heart","Site-specific click",1,1.3,7,0.18,7.18,7.18175808438798
+"Heart","Site-specific click",2,1.6,7,0.18,7.18,7.17451832805062
+"Heart","Site-specific click",3,2,7,0.18,7.18,7.17226152708754
+"Heart","Site-specific click",4,2.2,7,0.18,7.18,7.19540116038639

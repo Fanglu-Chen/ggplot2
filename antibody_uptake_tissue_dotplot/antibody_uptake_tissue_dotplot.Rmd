@@ -1,0 +1,245 @@
+---
+title: "Antibody Uptake Across Tissues"
+author: "Synthetic example"
+output:
+  html_document:
+    self_contained: true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, warning = FALSE, message = FALSE,
+  fig.align = "center", dpi = 160
+)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+set.seed(1031)
+```
+
+## Synthetic biodistribution data
+
+The data reproduce the structure of a tissue biodistribution experiment with three antibody-click conditions and four replicate measurements per tissue and condition.
+
+```{r data}
+tissue_levels <- c(
+  "MIA PaCa-2", "Spleen", "Liver", "Blood",
+  "Kidney", "Lungs", "Heart"
+)
+
+condition_levels <- c(
+  "Control IgG click", "Pre-click", "Site-specific click"
+)
+
+antibody_data <- tribble(
+  ~tissue, ~condition, ~rep1, ~rep2, ~rep3, ~rep4,
+  "MIA PaCa-2", "Control IgG click",    10.2, 11.2, 12.0, 13.3,
+  "MIA PaCa-2", "Pre-click",             8.1,  8.8,  9.1, 10.9,
+  "MIA PaCa-2", "Site-specific click",   15.0, 15.7, 17.1, 20.3,
+  "Spleen",      "Control IgG click",     4.5,  7.4,  7.8,  9.2,
+  "Spleen",      "Pre-click",             3.4,  5.2,  6.4,  7.8,
+  "Spleen",      "Site-specific click",    5.7,  6.0,  8.4,  9.2,
+  "Liver",       "Control IgG click",     5.2,  5.5,  6.7,  7.0,
+  "Liver",       "Pre-click",             7.5, 10.5, 14.0, 14.4,
+  "Liver",       "Site-specific click",    3.8,  4.1,  4.4,  4.9,
+  "Blood",       "Control IgG click",     5.0,  5.6,  6.0,  6.9,
+  "Blood",       "Pre-click",             3.7,  4.1,  4.5,  5.5,
+  "Blood",       "Site-specific click",    4.5,  5.1,  5.5,  5.8,
+  "Kidney",      "Control IgG click",     3.9,  4.1,  4.4,  4.8,
+  "Kidney",      "Pre-click",             3.3,  3.6,  3.9,  4.5,
+  "Kidney",      "Site-specific click",    3.5,  3.8,  4.1,  4.2,
+  "Lungs",       "Control IgG click",     2.7,  3.4,  3.7,  4.0,
+  "Lungs",       "Pre-click",             1.7,  2.1,  2.6,  3.0,
+  "Lungs",       "Site-specific click",    1.9,  2.7,  3.0,  3.1,
+  "Heart",       "Control IgG click",     1.7,  1.9,  2.1,  3.6,
+  "Heart",       "Pre-click",             0.8,  1.4,  1.8,  2.2,
+  "Heart",       "Site-specific click",    1.3,  1.6,  2.0,  2.2
+) %>%
+  pivot_longer(
+    starts_with("rep"),
+    names_to = "replicate",
+    names_prefix = "rep",
+    values_to = "uptake"
+  ) %>%
+  mutate(
+    replicate = as.integer(replicate),
+    tissue = factor(tissue, levels = tissue_levels),
+    condition = factor(condition, levels = condition_levels),
+    tissue_index = as.numeric(tissue),
+    group_offset = recode(
+      as.character(condition),
+      `Control IgG click` = -0.18,
+      `Pre-click` = 0,
+      `Site-specific click` = 0.18
+    ),
+    x_summary = tissue_index + group_offset,
+    x_point = x_summary + runif(n(), -0.045, 0.045)
+  )
+
+summary_data <- antibody_data %>%
+  group_by(tissue, condition, tissue_index, group_offset, x_summary) %>%
+  summarise(
+    mean = mean(uptake),
+    sd = sd(uptake),
+    .groups = "drop"
+  )
+
+write.csv(antibody_data, "synthetic_antibody_uptake.csv", row.names = FALSE)
+write.csv(summary_data, "antibody_uptake_summary.csv", row.names = FALSE)
+```
+
+## Tissue uptake dot plot
+
+```{r plot, fig.width=10.5, fig.height=9.0, out.width="94%"}
+condition_colours <- c(
+  "Control IgG click" = "#333333",
+  "Pre-click" = "#D9D9D9",
+  "Site-specific click" = "#9A4DAA"
+)
+
+uptake_plot <- ggplot() +
+  geom_errorbar(
+    data = summary_data,
+    aes(
+      x = x_summary,
+      ymin = pmax(0, mean - sd),
+      ymax = mean + sd
+    ),
+    width = 0, linewidth = 0.95, colour = "black"
+  ) +
+  geom_segment(
+    data = summary_data,
+    aes(
+      x = x_summary - 0.105, xend = x_summary + 0.105,
+      y = mean, yend = mean
+    ),
+    linewidth = 1.25, colour = "black", lineend = "butt"
+  ) +
+  geom_point(
+    data = antibody_data,
+    aes(x = x_point, y = uptake, fill = condition),
+    shape = 21, size = 4.1, stroke = 0.75,
+    colour = "#202020", alpha = 0.98
+  ) +
+  scale_fill_manual(
+    values = condition_colours,
+    name = NULL,
+    guide = guide_legend(
+      override.aes = list(size = 4.5, colour = "#202020", alpha = 1)
+    )
+  ) +
+  scale_x_continuous(
+    limits = c(0.45, 7.55),
+    breaks = seq_along(tissue_levels),
+    labels = tissue_levels,
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(
+    limits = c(-6.0, 23.5),
+    breaks = c(0, 5, 10, 15, 20),
+    expand = c(0, 0)
+  ) +
+  annotate(
+    "text", x = 1, y = 23.0,
+    label = "italic(P) == 0.0071", parse = TRUE,
+    size = 5.0
+  ) +
+  annotate(
+    "segment", x = 0.84, xend = 1.16,
+    y = 22.3, yend = 22.3, linewidth = 0.55
+  ) +
+  annotate(
+    "text", x = 1, y = 21.4,
+    label = "italic(P) == 0.001", parse = TRUE,
+    size = 5.0
+  ) +
+  annotate(
+    "segment", x = 1.04, xend = 1.28,
+    y = 20.7, yend = 20.7, linewidth = 0.55
+  ) +
+  annotate(
+    "text", x = 1.0, y = 6.5,
+    label = "italic(P) == 0.0321", parse = TRUE,
+    size = 4.8
+  ) +
+  annotate(
+    "text", x = 3.0, y = 23.1,
+    label = "italic(P) == 0.0114", parse = TRUE,
+    size = 5.0
+  ) +
+  annotate(
+    "segment", x = 2.85, xend = 3.15,
+    y = 22.4, yend = 22.4, linewidth = 0.55
+  ) +
+  annotate(
+    "text", x = 3.0, y = 21.55,
+    label = "italic(P) == 0.0043", parse = TRUE,
+    size = 5.0
+  ) +
+  annotate(
+    "segment", x = 3.03, xend = 3.22,
+    y = 20.85, yend = 20.85, linewidth = 0.55
+  ) +
+  annotate(
+    "text", x = 3.0, y = 2.15,
+    label = "italic(P) == 0.0168", parse = TRUE,
+    size = 4.8
+  ) +
+  annotate(
+    "segment", x = 0.45, xend = 1.55,
+    y = -4.55, yend = -4.55,
+    linewidth = 0.55, colour = "#4A4A4A"
+  ) +
+  annotate(
+    "text", x = 1.0, y = -5.45,
+    label = "Tumour", size = 5.0
+  ) +
+  annotate(
+    "segment", x = 1.72, xend = 7.55,
+    y = -4.55, yend = -4.55,
+    linewidth = 0.55, colour = "#4A4A4A"
+  ) +
+  annotate(
+    "text", x = 4.65, y = -5.45,
+    label = "Other tissues", size = 5.0
+  ) +
+  labs(
+    x = NULL,
+    y = expression("Antibody uptake at 120 h (%ID "*g^{-1}*")")
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.title.y = element_text(size = 16, margin = margin(r = 8)),
+    axis.text.y = element_text(size = 14, colour = "black"),
+    axis.text.x = element_text(
+      size = 14, colour = "black", angle = 45,
+      hjust = 1, vjust = 1
+    ),
+    axis.line = element_line(linewidth = 0.75),
+    axis.ticks = element_line(linewidth = 0.7),
+    axis.ticks.length = grid::unit(2.6, "mm"),
+    legend.position = c(0.82, 0.82),
+    legend.justification = c(0.5, 0.5),
+    legend.background = element_blank(),
+    legend.key = element_blank(),
+    legend.text = element_text(size = 14),
+    legend.spacing.y = grid::unit(0.5, "mm"),
+    plot.margin = margin(10, 15, 15, 10)
+  )
+
+ggsave(
+  "antibody_uptake_tissue_dotplot.png",
+  uptake_plot,
+  width = 10.5, height = 9.0, dpi = 320, bg = "white"
+)
+
+uptake_plot
+```
+
+## Files
+
+- `antibody_uptake_tissue_dotplot.png`: high-resolution figure.
+- `synthetic_antibody_uptake.csv`: replicate-level synthetic observations.
+- `antibody_uptake_summary.csv`: group means and standard deviations.
