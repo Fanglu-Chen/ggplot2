@@ -111,9 +111,9 @@ p <- ggplot(spectra, aes(wavenumber, intensity, colour = temperature)) +
   annotate("text", x = 734, y = 3.96, label = "A[1]*'(LO)'", parse = TRUE, size = 5.2) +
   scale_colour_manual(
     values = c(
-      "550 °C" = "#255DA8",
-      "525 °C" = "#178DB8",
-      "450 °C" = "#2BA9C1"
+      "550 °C" = "#8E3B76",
+      "525 °C" = "#E07A3F",
+      "450 °C" = "#2A9D8F"
     ),
     guide = "none"
   ) +
