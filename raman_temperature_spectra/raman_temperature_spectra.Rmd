@@ -1,0 +1,159 @@
+---
+title: "Temperature-dependent Raman spectra"
+output:
+  html_document:
+    self_contained: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.retina = 2
+)
+
+library(dplyr)
+library(ggplot2)
+library(tibble)
+
+set.seed(1031)
+```
+
+## Synthetic spectra
+
+```{r data}
+gaussian_peak <- function(x, centre, width, amplitude) {
+  amplitude * exp(-0.5 * ((x - centre) / width)^2)
+}
+
+wavenumber <- seq(300, 850, by = 0.7)
+
+temperature_parameters <- tribble(
+  ~temperature, ~offset, ~ao_amp, ~e2_amp, ~a1_amp, ~shoulder_amp, ~noise_sd,
+  "450 °C", 0.36, 0.015, 0.020, 0.025, 0.012, 0.027,
+  "525 °C", 1.30, 0.250, 0.095, 0.720, 0.190, 0.024,
+  "550 °C", 2.45, 0.205, 0.245, 0.790, 0.170, 0.023
+)
+
+make_spectrum <- function(temperature, offset, ao_amp, e2_amp,
+                          a1_amp, shoulder_amp, noise_sd) {
+  baseline <- 0.025 * sin((wavenumber - 300) / 35) +
+    0.012 * cos((wavenumber - 300) / 14)
+
+  intensity <- offset + baseline +
+    gaussian_peak(wavenumber, 421, 11, ao_amp) +
+    gaussian_peak(wavenumber, 573, 23, e2_amp) +
+    gaussian_peak(wavenumber, 729, 18, a1_amp) +
+    gaussian_peak(wavenumber, 782, 29, shoulder_amp) +
+    rnorm(length(wavenumber), 0, noise_sd)
+
+  tibble(
+    wavenumber = wavenumber,
+    intensity = intensity,
+    temperature = temperature
+  )
+}
+
+spectra <- bind_rows(lapply(seq_len(nrow(temperature_parameters)), function(i) {
+  do.call(make_spectrum, as.list(temperature_parameters[i, ]))
+})) %>%
+  mutate(
+    temperature = factor(temperature, levels = c("550 °C", "525 °C", "450 °C"))
+  )
+
+write.csv(spectra, "synthetic_raman_spectra.csv", row.names = FALSE)
+write.csv(temperature_parameters, "spectrum_parameters.csv", row.names = FALSE)
+
+spectra
+```
+
+## Figure
+
+```{r figure, fig.width=6.2, fig.height=10.5, out.width='72%'}
+mode_bands <- tribble(
+  ~xmin, ~xmax,
+  407, 431,
+  560, 585,
+  716, 752
+)
+
+temperature_labels <- tribble(
+  ~x, ~y, ~label,
+  438, 3.02, "550 * degree*C",
+  438, 1.90, "525 * degree*C",
+  438, 0.72, "450 * degree*C"
+)
+
+p <- ggplot(spectra, aes(wavenumber, intensity, colour = temperature)) +
+  geom_rect(
+    data = mode_bands,
+    aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+    inherit.aes = FALSE,
+    fill = "#D7D7D7",
+    colour = NA,
+    alpha = 0.88
+  ) +
+  geom_line(linewidth = 1.35, lineend = "round") +
+  geom_text(
+    data = temperature_labels,
+    aes(x = x, y = y, label = label),
+    inherit.aes = FALSE,
+    parse = TRUE,
+    hjust = 0,
+    size = 5.0,
+    colour = "#171717"
+  ) +
+  annotate("text", x = 419, y = 3.96, label = "AO", size = 5.2) +
+  annotate("text", x = 572, y = 3.96, label = "E[2]*'(high)'", parse = TRUE, size = 5.2) +
+  annotate("text", x = 734, y = 3.96, label = "A[1]*'(LO)'", parse = TRUE, size = 5.2) +
+  scale_colour_manual(
+    values = c(
+      "550 °C" = "#255DA8",
+      "525 °C" = "#178DB8",
+      "450 °C" = "#2BA9C1"
+    ),
+    guide = "none"
+  ) +
+  scale_x_continuous(
+    limits = c(300, 850),
+    breaks = seq(300, 800, by = 100),
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(
+    limits = c(0, 4.10),
+    expand = c(0, 0)
+  ) +
+  labs(
+    x = expression(Wavenumber~(cm^{-1})),
+    y = "Intensity (a.u.)"
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.title.x = element_text(size = 17, margin = margin(t = 12)),
+    axis.title.y = element_text(size = 17, margin = margin(r = 12)),
+    axis.text.x = element_text(size = 15, colour = "#202020"),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.line = element_line(linewidth = 0.65, colour = "#222222"),
+    axis.ticks.x = element_line(linewidth = 0.6, colour = "#222222"),
+    axis.ticks.length = unit(2.7, "mm"),
+    plot.margin = margin(12, 12, 12, 12),
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA)
+  )
+
+ggsave(
+  "raman_temperature_spectra.png",
+  plot = p,
+  width = 6.2,
+  height = 10.5,
+  dpi = 360,
+  bg = "white"
+)
+
+p
+```
