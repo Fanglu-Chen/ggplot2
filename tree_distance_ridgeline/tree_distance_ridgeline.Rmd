@@ -72,7 +72,7 @@ density_data <- bind_rows(lapply(split(embedding_data, embedding_data$tree_dista
     tree_distance = level,
     embedding_distance = density_result$x,
     density = density_result$y,
-    ridge_y = level + 0.78 * density_result$y / max(density_result$y)
+    ridge_y = level + 1.16 * density_result$y / max(density_result$y)
   )
 }))
 
@@ -183,7 +183,7 @@ p <- ggplot() +
       colour = factor(tree_distance)
     ),
     linewidth = 0.65,
-    alpha = 0.78
+    alpha = 0.66
   ) +
   geom_segment(
     data = tibble(level = 1:5),
@@ -308,4 +308,3 @@ ggsave(
 
 p
 ```
-
