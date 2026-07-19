@@ -47,6 +47,8 @@ families <- c(
 )
 
 samples_per_group <- 5
+group_gap <- 1.80
+
 sample_table <- expand.grid(
   group = diet_groups,
   replicate = seq_len(samples_per_group),
@@ -59,6 +61,7 @@ sample_table <- expand.grid(
   arrange(group, replicate) |>
   mutate(
     sample_index = row_number(),
+    plot_x = sample_index + (as.integer(group) - 1) * group_gap,
     ici_score = scales::rescale(sample_index, to = c(0.08, 0.96)),
     sample = sprintf("S%02d", sample_index)
   )
@@ -108,6 +111,7 @@ composition_list <- lapply(seq_len(nrow(sample_table)), function(i) {
   data.frame(
     sample = sample_table$sample[i],
     sample_index = sample_table$sample_index[i],
+    plot_x = sample_table$plot_x[i],
     group = group_name,
     replicate = sample_table$replicate[i],
     ici_score = score,
@@ -124,7 +128,7 @@ abundance_data <- bind_rows(composition_list) |>
 
 group_midpoints <- sample_table |>
   group_by(group) |>
-  summarise(midpoint = mean(sample_index), .groups = "drop")
+  summarise(midpoint = mean(plot_x), .groups = "drop")
 
 write.csv(
   abundance_data,
@@ -162,7 +166,7 @@ family_colours <- c(
 p <- ggplot(abundance_data) +
   geom_col(
     aes(
-      x = sample_index,
+      x = plot_x,
       y = relative_abundance,
       fill = family
     ),
@@ -173,14 +177,18 @@ p <- ggplot(abundance_data) +
   ) +
   annotate(
     "polygon",
-    x = c(0.5, max(sample_table$sample_index) + 0.5, max(sample_table$sample_index) + 0.5),
+    x = c(
+      min(sample_table$plot_x) - 0.5,
+      max(sample_table$plot_x) + 0.5,
+      max(sample_table$plot_x) + 0.5
+    ),
     y = c(102.7, 102.7, 112.0),
     fill = "#D5DEE5",
     colour = NA
   ) +
   annotate(
     "text",
-    x = max(sample_table$sample_index) - 0.4,
+    x = max(sample_table$plot_x) - 0.4,
     y = 106.8,
     label = "ICI score",
     hjust = 1,

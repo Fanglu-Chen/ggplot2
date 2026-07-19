@@ -1,6 +1,6 @@
 # Microbiome relative-abundance composition
 
-This folder contains a reproducible R Markdown reconstruction of a sample-level microbiome composition plot. Synthetic data are generated with `set.seed(1031)` and each stacked bar sums to 100%.
+This folder contains a reproducible R Markdown reconstruction of a sample-level microbiome composition plot. Synthetic data are generated with `set.seed(1031)`, each stacked bar sums to 100%, and enlarged gaps separate the twelve study groups.
 
 ## Files
 
