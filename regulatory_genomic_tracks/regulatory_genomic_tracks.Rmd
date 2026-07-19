@@ -1,0 +1,343 @@
+---
+title: "Regulatory genomic feature tracks"
+output:
+  html_document:
+    self_contained: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.retina = 2
+)
+
+library(dplyr)
+library(ggplot2)
+library(tibble)
+
+set.seed(1031)
+```
+
+## Synthetic regulatory data
+
+```{r data}
+region_start <- 106.84
+region_end <- 107.24
+promoter_position <- 107.041
+
+candidate_elements <- tibble(
+  element_id = sprintf("E%03d", seq_len(96)),
+  position_mb = sort(runif(96, region_start, region_end))
+) %>%
+  mutate(
+    distance_mb = abs(position_mb - promoter_position),
+    local_peak = exp(-0.5 * ((position_mb - promoter_position) / 0.018)^2),
+    distal_peak = exp(-0.5 * ((position_mb - 107.171) / 0.006)^2),
+    re2g_score = pmin(1, 0.04 + 0.55 * local_peak +
+      0.23 * distal_peak + rbeta(n(), 1.1, 6.5) * 0.36),
+    abc_score = pmin(1, 0.015 + 0.76 * local_peak +
+      rbeta(n(), 0.9, 8) * 0.14),
+    contact_frequency = pmin(0.22, 0.01 + 0.18 * local_peak +
+      rbeta(n(), 1.1, 7) * 0.055),
+    nearby_activity = pmin(4200, 40 +
+      rgamma(n(), 1.35, 210) + 2900 * distal_peak + 1050 * local_peak),
+    distance_scaled = distance_mb / max(distance_mb),
+    tss_between = if_else(position_mb < 106.858 | position_mb > 107.168, 1, 0),
+    elements_between = abs(rank(position_mb) -
+      which.min(abs(position_mb - promoter_position)))
+  )
+
+link_data <- candidate_elements %>%
+  arrange(desc(re2g_score)) %>%
+  slice_head(n = 13) %>%
+  transmute(
+    element_id,
+    element_position = position_mb,
+    promoter_position = promoter_position,
+    link_strength = re2g_score
+  )
+
+gene_models <- tribble(
+  ~gene, ~start_mb, ~end_mb, ~direction, ~gene_y, ~gene_colour, ~label_x,
+  "PIK3CG",  106.857, 106.905, -1, 9.56, "#606060", 106.849,
+  "PRKAR2B", 107.041, 107.158,  1, 9.57, "#111111", 107.001,
+  "HBP1",    107.148, 107.204, -1, 9.29, "#464646", 107.145,
+  "COG5",    107.195, 107.241, -1, 9.56, "#696969", 107.180
+) %>%
+  mutate(
+    plot_start = if_else(direction > 0, start_mb, end_mb),
+    plot_end = if_else(direction > 0, end_mb, start_mb)
+  )
+
+make_exons <- function(gene, positions, y, colour, width = 0.0030) {
+  tibble(
+    gene = gene,
+    xmin = positions - width / 2,
+    xmax = positions + width / 2,
+    ymin = y - 0.105,
+    ymax = y + 0.105,
+    exon_colour = colour
+  )
+}
+
+gene_exons <- bind_rows(
+  make_exons("PIK3CG", c(106.859, 106.863, 106.867, 106.872, 106.876, 106.879, 106.903), 9.56, "#606060"),
+  make_exons("PRKAR2B", c(107.043, 107.070, 107.122, 107.128, 107.141, 107.147, 107.151, 107.155), 9.57, "#111111"),
+  make_exons("HBP1", c(107.151, 107.157, 107.162, 107.167, 107.172, 107.176, 107.182, 107.191), 9.29, "#464646"),
+  make_exons("COG5", c(107.199, 107.205, 107.222, 107.229, 107.237), 9.56, "#696969")
+)
+
+write.csv(candidate_elements, "synthetic_candidate_elements.csv", row.names = FALSE)
+write.csv(link_data, "synthetic_re2g_links.csv", row.names = FALSE)
+write.csv(gene_models, "synthetic_gene_models.csv", row.names = FALSE)
+
+candidate_elements
+```
+
+## Multi-track figure
+
+```{r figure, fig.width=16.5, fig.height=6.5, out.width='100%'}
+track_colours <- c(
+  promoter = "#00A087",
+  promoter_class = "#8A8A8A",
+  abc = "#3C8DAD",
+  contact = "#7B2CBF",
+  enhancer = "#E76F51",
+  distance = "#C58B2A",
+  genomic = "#202020"
+)
+
+track_labels <- tribble(
+  ~label, ~y,
+  "Genes", 9.56,
+  "ENCODE-rE2G links", 8.55,
+  "ENCODE-rE2G score", 7.70,
+  "Candidate elements", 7.24,
+  "DNase signal at P", 6.72,
+  "Ubiquitously expressed gene", 6.08,
+  "ABC score", 5.47,
+  "Contact frequency (average Hi-C)", 4.69,
+  "Activity of elements within 5 kb of E", 3.82,
+  "Distance to TSS", 2.95,
+  "No. of TSSs between E and P", 2.20,
+  "No. of elements between E and P", 1.30
+)
+
+coordinate_ticks <- tibble(
+  x = c(106.9, 107.0, 107.1, 107.2),
+  label = c("106.9 Mb", "107 Mb", "107.1 Mb", "107.2 Mb")
+)
+
+legend_data <- tribble(
+  ~label, ~colour, ~y,
+  "Promoter activity", track_colours["promoter"], 8.88,
+  "Promoter class", track_colours["promoter_class"], 8.03,
+  "ABC score", track_colours["abc"], 7.18,
+  "3D contact", track_colours["contact"], 6.33,
+  "Nearby enhancers", track_colours["enhancer"], 5.48,
+  "Distance to TSS", track_colours["distance"], 4.63,
+  "Genomic features", track_colours["genomic"], 3.78
+)
+
+separator_data <- tibble(
+  y = c(8.18, 7.18, 6.45, 5.79, 5.08, 4.28, 3.47, 2.66, 1.82, 0.95)
+)
+
+p <- ggplot() +
+  geom_segment(
+    data = separator_data,
+    aes(x = region_start, xend = region_end, y = y, yend = y),
+    colour = "#C8C8C8", linewidth = 0.42
+  ) +
+  geom_segment(
+    aes(x = region_start, xend = region_end, y = 9.82, yend = 9.82),
+    colour = "#202020", linewidth = 0.62
+  ) +
+  geom_segment(
+    data = coordinate_ticks,
+    aes(x = x, xend = x, y = 9.77, yend = 9.87),
+    linewidth = 0.50, colour = "#202020"
+  ) +
+  geom_text(
+    data = coordinate_ticks,
+    aes(x = x, y = 10.03, label = label),
+    size = 4.0, colour = "#252525"
+  ) +
+  geom_segment(
+    data = gene_models,
+    aes(
+      x = plot_start, xend = plot_end,
+      y = gene_y, yend = gene_y,
+      colour = gene_colour
+    ),
+    linewidth = 0.62,
+    arrow = grid::arrow(type = "closed", length = unit(1.4, "mm")),
+    show.legend = FALSE
+  ) +
+  geom_rect(
+    data = gene_exons,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = exon_colour),
+    colour = NA,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    data = gene_models,
+    aes(x = label_x, y = gene_y + 0.01, label = gene),
+    hjust = 1, fontface = "italic", size = 4.0,
+    colour = "#303030"
+  ) +
+  geom_curve(
+    data = link_data,
+    aes(
+      x = element_position, xend = promoter_position,
+      y = 8.18, yend = 8.18,
+      linewidth = link_strength,
+      group = element_id
+    ),
+    curvature = 0.24,
+    colour = track_colours["enhancer"],
+    alpha = 0.82,
+    lineend = "round"
+  ) +
+  geom_rect(
+    data = candidate_elements,
+    aes(
+      xmin = position_mb - 0.00062,
+      xmax = position_mb + 0.00062,
+      ymin = 7.22,
+      ymax = 7.22 + 0.62 * re2g_score
+    ),
+    fill = track_colours["enhancer"], colour = NA
+  ) +
+  geom_rect(
+    data = candidate_elements,
+    aes(
+      xmin = position_mb - 0.00072,
+      xmax = position_mb + 0.00072,
+      ymin = 7.02,
+      ymax = 7.13
+    ),
+    fill = track_colours["genomic"], colour = NA
+  ) +
+  annotate(
+    "rect",
+    xmin = promoter_position - 0.00145,
+    xmax = promoter_position + 0.00145,
+    ymin = 6.46, ymax = 7.12,
+    fill = track_colours["promoter"], colour = NA
+  ) +
+  annotate(
+    "segment", x = promoter_position, xend = promoter_position,
+    y = 5.82, yend = 6.45,
+    colour = track_colours["promoter_class"], linewidth = 1.15
+  ) +
+  annotate(
+    "point", x = promoter_position, y = 6.09,
+    colour = track_colours["promoter_class"], size = 2.5
+  ) +
+  geom_rect(
+    data = candidate_elements,
+    aes(
+      xmin = position_mb - 0.00052,
+      xmax = position_mb + 0.00052,
+      ymin = 5.09,
+      ymax = 5.09 + 0.63 * abc_score
+    ),
+    fill = track_colours["abc"], colour = NA
+  ) +
+  geom_rect(
+    data = candidate_elements,
+    aes(
+      xmin = position_mb - 0.00070,
+      xmax = position_mb + 0.00070,
+      ymin = 4.29,
+      ymax = 4.29 + 0.70 * contact_frequency / 0.22
+    ),
+    fill = track_colours["contact"], colour = NA
+  ) +
+  geom_rect(
+    data = candidate_elements,
+    aes(
+      xmin = position_mb - 0.00065,
+      xmax = position_mb + 0.00065,
+      ymin = 3.48,
+      ymax = 3.48 + 0.69 * nearby_activity / 4200
+    ),
+    fill = track_colours["enhancer"], colour = NA
+  ) +
+  geom_line(
+    data = candidate_elements,
+    aes(x = position_mb, y = 2.74 + 0.64 * distance_scaled),
+    colour = track_colours["distance"], linewidth = 0.68
+  ) +
+  geom_step(
+    data = candidate_elements,
+    aes(x = position_mb, y = 1.88 + 0.60 * tss_between),
+    colour = track_colours["genomic"], linewidth = 0.72,
+    direction = "mid"
+  ) +
+  geom_line(
+    data = candidate_elements,
+    aes(x = position_mb, y = 1.02 + 0.66 * elements_between / max(elements_between)),
+    colour = track_colours["genomic"], linewidth = 0.72
+  ) +
+  geom_text(
+    data = track_labels,
+    aes(x = 106.804, y = y, label = label),
+    hjust = 1, size = 3.75, colour = "#303030"
+  ) +
+  annotate("text", x = 106.835, y = 7.81, label = "1", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 7.23, label = "0", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 6.96, label = "0.8", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 6.48, label = "0", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 6.30, label = "Yes", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 5.91, label = "No", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 5.69, label = "1", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 5.10, label = "0", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 4.99, label = "0.22", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 4.30, label = "0", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 4.15, label = "4,000", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 3.49, label = "0", hjust = 1, size = 3.1) +
+  annotate("text", x = 106.835, y = 2.75, label = "0 kb", hjust = 1, size = 3.1) +
+  annotate("text", x = 107.257, y = 9.58, label = "Feature categories", hjust = 0, size = 4.1) +
+  geom_segment(
+    data = legend_data,
+    aes(x = 107.258, xend = 107.266, y = y, yend = y, colour = colour),
+    linewidth = 1.15,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    data = legend_data,
+    aes(x = 107.270, y = y, label = label),
+    hjust = 0, size = 3.75, colour = "#303030"
+  ) +
+  scale_colour_identity() +
+  scale_fill_identity() +
+  scale_linewidth_continuous(range = c(0.45, 1.1), guide = "none") +
+  coord_cartesian(
+    xlim = c(106.68, 107.37),
+    ylim = c(0.76, 10.22),
+    clip = "off"
+  ) +
+  theme_void(base_size = 12) +
+  theme(
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA),
+    plot.margin = margin(8, 10, 8, 8)
+  )
+
+ggsave(
+  "regulatory_genomic_tracks.png",
+  plot = p,
+  width = 16.5,
+  height = 6.5,
+  dpi = 330,
+  bg = "white"
+)
+
+p
+```
