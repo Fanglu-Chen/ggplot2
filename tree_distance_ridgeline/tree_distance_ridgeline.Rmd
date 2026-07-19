@@ -1,0 +1,311 @@
+---
+title: "Tree-distance embedding distributions"
+output:
+  html_document:
+    self_contained: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.retina = 2
+)
+
+library(dplyr)
+library(ggplot2)
+library(tibble)
+
+set.seed(1031)
+```
+
+## Synthetic embedding distances
+
+```{r data}
+draw_mixture <- function(n, means, sds, weights) {
+  component <- sample(seq_along(means), n, replace = TRUE, prob = weights)
+  values <- rnorm(n, means[component], sds[component])
+  pmin(1.50, pmax(0.20, values))
+}
+
+level_specs <- tribble(
+  ~tree_distance, ~sample_size,
+  1, 1050,
+  2, 4210,
+  3, 8120,
+  4, 10840,
+  5, 11520
+)
+
+embedding_data <- bind_rows(
+  tibble(tree_distance = 1, embedding_distance = draw_mixture(
+    1050, c(0.73, 0.96, 1.23), c(0.10, 0.08, 0.09), c(0.35, 0.45, 0.20)
+  )),
+  tibble(tree_distance = 2, embedding_distance = draw_mixture(
+    4210, c(0.55, 0.82, 1.02), c(0.08, 0.15, 0.13), c(0.12, 0.33, 0.55)
+  )),
+  tibble(tree_distance = 3, embedding_distance = draw_mixture(
+    8120, c(0.72, 1.04, 1.18), c(0.12, 0.13, 0.09), c(0.14, 0.66, 0.20)
+  )),
+  tibble(tree_distance = 4, embedding_distance = draw_mixture(
+    10840, c(0.83, 1.12, 1.27), c(0.15, 0.11, 0.09), c(0.19, 0.62, 0.19)
+  )),
+  tibble(tree_distance = 5, embedding_distance = draw_mixture(
+    11520, c(0.92, 1.17, 1.33), c(0.12, 0.09, 0.07), c(0.20, 0.64, 0.16)
+  ))
+)
+
+density_data <- bind_rows(lapply(split(embedding_data, embedding_data$tree_distance), function(group) {
+  density_result <- density(
+    group$embedding_distance,
+    from = 0.20,
+    to = 1.50,
+    n = 512,
+    adjust = 0.90
+  )
+
+  level <- unique(group$tree_distance)
+  tibble(
+    tree_distance = level,
+    embedding_distance = density_result$x,
+    density = density_result$y,
+    ridge_y = level + 0.78 * density_result$y / max(density_result$y)
+  )
+}))
+
+write.csv(embedding_data, "synthetic_embedding_distances.csv", row.names = FALSE)
+write.csv(density_data, "density_curves.csv", row.names = FALSE)
+
+level_specs
+```
+
+## Figure
+
+```{r figure, fig.width=8.2, fig.height=9.7, out.width='78%'}
+ridge_colours <- c(
+  "1" = "#4C78A8",
+  "2" = "#72B7B2",
+  "3" = "#54A24B",
+  "4" = "#ECA82C",
+  "5" = "#B279A2"
+)
+
+tree_segments <- tribble(
+  ~level, ~x, ~xend, ~y, ~yend,
+  1, -0.22, -0.22, 1.07, 1.43,
+  2, -0.30, -0.14, 2.38, 2.38,
+  2, -0.30, -0.30, 2.05, 2.38,
+  2, -0.14, -0.14, 2.05, 2.38,
+  2, -0.22, -0.22, 2.38, 2.70,
+  3, -0.36, -0.23, 3.34, 3.34,
+  3, -0.36, -0.36, 3.05, 3.34,
+  3, -0.23, -0.23, 3.05, 3.34,
+  3, -0.295, -0.10, 3.62, 3.62,
+  3, -0.295, -0.295, 3.34, 3.62,
+  3, -0.10, -0.10, 3.05, 3.62,
+  3, -0.20, -0.20, 3.62, 3.77,
+  4, -0.43, -0.31, 4.34, 4.34,
+  4, -0.43, -0.43, 4.05, 4.34,
+  4, -0.31, -0.31, 4.05, 4.34,
+  4, -0.19, -0.07, 4.34, 4.34,
+  4, -0.19, -0.19, 4.05, 4.34,
+  4, -0.07, -0.07, 4.05, 4.34,
+  4, -0.37, -0.13, 4.62, 4.62,
+  4, -0.37, -0.37, 4.34, 4.62,
+  4, -0.13, -0.13, 4.34, 4.62,
+  4, -0.25, -0.25, 4.62, 4.78,
+  5, -0.46, -0.36, 5.34, 5.34,
+  5, -0.46, -0.46, 5.05, 5.34,
+  5, -0.36, -0.36, 5.05, 5.34,
+  5, -0.24, -0.14, 5.34, 5.34,
+  5, -0.24, -0.24, 5.05, 5.34,
+  5, -0.14, -0.14, 5.05, 5.34,
+  5, -0.05, -0.05, 5.05, 5.52,
+  5, -0.41, -0.19, 5.62, 5.62,
+  5, -0.41, -0.41, 5.34, 5.62,
+  5, -0.19, -0.19, 5.34, 5.62,
+  5, -0.30, -0.05, 5.84, 5.84,
+  5, -0.30, -0.30, 5.62, 5.84,
+  5, -0.05, -0.05, 5.52, 5.84,
+  5, -0.175, -0.175, 5.84, 5.98
+)
+
+tree_points <- tribble(
+  ~level, ~x, ~y,
+  1, -0.22, 1.07,
+  1, -0.22, 1.43,
+  2, -0.30, 2.05,
+  2, -0.14, 2.05,
+  3, -0.36, 3.05,
+  3, -0.23, 3.05,
+  3, -0.10, 3.05,
+  4, -0.43, 4.05,
+  4, -0.31, 4.05,
+  4, -0.19, 4.05,
+  4, -0.07, 4.05,
+  5, -0.46, 5.05,
+  5, -0.36, 5.05,
+  5, -0.24, 5.05,
+  5, -0.14, 5.05,
+  5, -0.05, 5.05
+)
+
+brackets <- tibble(
+  comparison = paste0(seq_len(4), "_", seq_len(4) + 1),
+  y0 = 1:4 + 0.42,
+  y1 = 2:5 + 0.42,
+  x = 1.58
+)
+
+axis_ticks <- tibble(
+  value = seq(0.2, 1.4, by = 0.2),
+  label = sprintf("%.1f", value)
+)
+
+sample_labels <- level_specs %>%
+  mutate(
+    x = 0.255,
+    y = tree_distance + 0.63,
+    label = paste0("(n = ", format(sample_size, big.mark = ","), ")")
+  )
+
+p <- ggplot() +
+  geom_polygon(
+    data = density_data,
+    aes(
+      x = embedding_distance,
+      y = ridge_y,
+      group = tree_distance,
+      fill = factor(tree_distance),
+      colour = factor(tree_distance)
+    ),
+    linewidth = 0.65,
+    alpha = 0.78
+  ) +
+  geom_segment(
+    data = tibble(level = 1:5),
+    aes(x = 0.20, xend = 1.50, y = level, yend = level),
+    colour = "#555555", linewidth = 0.48
+  ) +
+  geom_segment(
+    data = tree_segments,
+    aes(x = x, xend = xend, y = y, yend = yend),
+    colour = "#363636", linewidth = 0.58
+  ) +
+  geom_point(
+    data = tree_points,
+    aes(x = x, y = y),
+    size = 3.0, colour = "#242424"
+  ) +
+  geom_text(
+    data = tibble(level = 1:5),
+    aes(x = 0.16, y = level + 0.12, label = level),
+    hjust = 1, size = 4.2, colour = "#303030"
+  ) +
+  geom_text(
+    data = sample_labels,
+    aes(x = x, y = y, label = label),
+    hjust = 0, fontface = "italic", size = 3.75,
+    colour = "#262626"
+  ) +
+  annotate(
+    "segment", x = 0.20, xend = 1.50,
+    y = 0.78, yend = 0.78,
+    colour = "#333333", linewidth = 0.58
+  ) +
+  geom_segment(
+    data = axis_ticks,
+    aes(x = value, xend = value, y = 0.78, yend = 0.69),
+    colour = "#333333", linewidth = 0.55
+  ) +
+  geom_text(
+    data = axis_ticks,
+    aes(x = value, y = 0.56, label = label),
+    size = 3.8, colour = "#303030"
+  ) +
+  annotate(
+    "text", x = 0.85, y = 0.20,
+    label = "Embedding distance in UCE",
+    size = 4.4, colour = "#202020"
+  ) +
+  annotate(
+    "text", x = -0.54, y = 3.22,
+    label = "Tree distance in cell ontology",
+    angle = 90, size = 4.35, colour = "#202020"
+  ) +
+  annotation_custom(
+    grid::roundrectGrob(
+      r = unit(0.10, "snpc"),
+      gp = grid::gpar(fill = "#EEF4FF", col = "#315A8A", lwd = 1.8)
+    ),
+    xmin = 0.34, xmax = 1.10,
+    ymin = 6.53, ymax = 7.27
+  ) +
+  annotate(
+    "text", x = 0.72, y = 6.90,
+    label = "Map new\ndataset directly",
+    size = 4.5, lineheight = 0.95,
+    colour = "#243A5A"
+  ) +
+  annotate(
+    "segment", x = 1.10, xend = 1.34,
+    y = 6.91, yend = 6.91,
+    colour = "#315A8A", linewidth = 0.75
+  ) +
+  annotate(
+    "segment", x = 1.34, xend = 1.34,
+    y = 6.91, yend = 6.20,
+    colour = "#315A8A", linewidth = 0.75,
+    arrow = grid::arrow(type = "closed", length = unit(2.5, "mm"))
+  ) +
+  geom_segment(
+    data = brackets,
+    aes(x = x, xend = x, y = y0, yend = y1),
+    colour = "#545454", linewidth = 0.62,
+    linetype = "dashed"
+  ) +
+  geom_segment(
+    data = brackets,
+    aes(x = x - 0.065, xend = x, y = y0, yend = y0),
+    colour = "#545454", linewidth = 0.62
+  ) +
+  geom_segment(
+    data = brackets,
+    aes(x = x - 0.065, xend = x, y = y1, yend = y1),
+    colour = "#545454", linewidth = 0.62
+  ) +
+  geom_text(
+    data = brackets,
+    aes(x = x + 0.045, y = (y0 + y1) / 2, label = "***"),
+    angle = 90, size = 4.2, fontface = "bold",
+    colour = "#4A4A4A"
+  ) +
+  scale_fill_manual(values = ridge_colours, guide = "none") +
+  scale_colour_manual(values = ridge_colours, guide = "none") +
+  coord_cartesian(
+    xlim = c(-0.60, 1.72),
+    ylim = c(0.03, 7.42),
+    clip = "off"
+  ) +
+  theme_void(base_size = 12) +
+  theme(
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA),
+    plot.margin = margin(8, 10, 8, 8)
+  )
+
+ggsave(
+  "tree_distance_ridgeline.png",
+  plot = p,
+  width = 8.2,
+  height = 9.7,
+  dpi = 340,
+  bg = "white"
+)
+
+p
+```
+
